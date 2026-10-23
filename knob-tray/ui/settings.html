@@ -54,6 +54,15 @@
   .side-btn:hover { background: var(--panel); }
   .side-btn.sel { background: var(--panel-hover); box-shadow: var(--shadow); }
   .side-btn.add { color: var(--accent); font-weight: 600; }
+  .side { position: relative; }
+  .menu { position: absolute; left: 12px; right: 12px; z-index: 5; background: var(--panel-hover); border: 1px solid var(--border); border-radius: 10px;
+          box-shadow: 0 10px 30px rgba(0,0,0,.28); padding: 6px; display: flex; flex-direction: column; gap: 2px; animation: fade .12s ease-out; }
+  .menu[hidden] { display: none; }
+  .menu button { display: flex; gap: 10px; align-items: flex-start; text-align: left; border: 0; background: transparent; border-radius: 7px; padding: 8px 10px; }
+  .menu button:hover { background: var(--chip); }
+  .menu svg { margin-top: 1px; color: var(--muted); }
+  .menu b { display: block; font-weight: 600; }
+  .menu small { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; margin-top: 1px; }
   html.dark .side-btn.add { color: color-mix(in srgb, var(--accent) 55%, white); }
 
   /* --- main --- */
@@ -182,6 +191,7 @@
     <div class="label">Layers</div>
     <div id="layers"></div>
     <button class="side-btn add" id="add-layer"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New layer</button>
+    <div class="menu" id="add-menu" hidden></div>
     <div class="grow"></div>
     <button class="side-btn" id="nav-general"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>General</button>
   </aside>
@@ -219,10 +229,10 @@
             <input class="num" type="number" id="maxps" min="0" max="50"></div>
         </div>
         <div class="card">
-          <div class="card-head"><h2>Apps</h2><span class="muted">Switch to this layer automatically</span></div>
+          <div class="card-head"><h2>Apps</h2><span class="muted">Switch here automatically. title:text matches window titles</span></div>
           <div class="chiplist" id="app-chips"></div>
           <div class="add-row">
-            <input class="text-in" id="app-input" list="running" placeholder="Program name, e.g. chrome" spellcheck="false">
+            <input class="text-in" id="app-input" list="running" placeholder="Program (chrome) or title:YouTube" spellcheck="false">
             <datalist id="running"></datalist>
             <button class="btn" id="app-add">Add</button>
           </div>
@@ -307,7 +317,8 @@ const FIELDS = [
 ];
 const GESTURES = [["double_tap", "Double-tap"], ["triple_tap", "Triple-tap"], ["tray_only", "Tray menu only"]];
 
-const S = { cfg: null, saved: "", sel: 0, page: "layer", pairs: [], functions: [], recording: null, pairOf: [] };
+const S = { cfg: null, saved: "", sel: 0, page: "layer", pairs: [], functions: [], templates: [], recording: null, pairOf: [] };
+const appLabel = a => a.startsWith("title:") ? `title: ${a.slice(6)}` : a;
 const L = () => S.cfg.layers[S.sel];
 
 // --- toast + dirty state ---
@@ -337,7 +348,7 @@ function renderSidebar() {
     <button class="layer ${S.page === "layer" && i === S.sel ? "sel" : ""} ${l.enabled ? "" : "off"}" data-i="${i}">
       <div class="name">${esc(l.name || "Untitled")}<span class="lnum">${l.enabled ? i + 1 : "off"}</span></div>
       <div class="sum">${esc(summary(l, i))}</div>
-      ${l.apps.length ? `<div class="apps">${l.apps.slice(0, 4).map(a => `<span class="tag">${esc(a)}</span>`).join("")}${l.apps.length > 4 ? `<span class="tag">+${l.apps.length - 4}</span>` : ""}</div>` : ""}
+      ${l.apps.length ? `<div class="apps">${l.apps.slice(0, 4).map(a => `<span class="tag">${esc(appLabel(a))}</span>`).join("")}${l.apps.length > 4 ? `<span class="tag">+${l.apps.length - 4}</span>` : ""}</div>` : ""}
     </button>`).join("");
   $("nav-general").classList.toggle("sel", S.page === "general");
 }
@@ -484,11 +495,13 @@ $("maxps").addEventListener("input", e => { L().max_per_sec = Math.max(0, parseI
 function renderApps() {
   const apps = L().apps;
   $("app-chips").innerHTML = apps.length
-    ? apps.map((a, i) => `<span class="appchip">${esc(a)}<button data-i="${i}" title="Remove">${svg('<path d="M6 6l12 12M18 6 6 18"/>')}</button></span>`).join("")
+    ? apps.map((a, i) => `<span class="appchip">${esc(appLabel(a))}<button data-i="${i}" title="Remove">${svg('<path d="M6 6l12 12M18 6 6 18"/>')}</button></span>`).join("")
     : `<span class="empty">No apps. This layer is only used when you pick it.</span>`;
 }
 function addApp() {
-  const v = $("app-input").value.trim().toLowerCase().replace(/\.exe$/, "");
+  let v = $("app-input").value.trim().toLowerCase();
+  v = v.startsWith("title:") ? "title:" + v.slice(6).trim() : v.replace(/\.exe$/, "");
+  if (v === "title:") return;
   if (!v) return;
   const owner = S.cfg.layers.findIndex((l, i) => i !== S.sel && l.apps.includes(v));
   if (owner >= 0) { toast(`‘${v}’ already switches to ‘${S.cfg.layers[owner].name}’`, true); return; }
@@ -525,11 +538,35 @@ $("delete").addEventListener("click", () => {
   if (S.cfg.layers.length === 1 || !confirm(`Delete the layer ‘${L().name}’?`)) return;
   S.cfg.layers.splice(S.sel, 1); S.pairOf.splice(S.sel, 1); S.sel = Math.min(S.sel, S.cfg.layers.length - 1); render(); changed();
 });
-$("add-layer").addEventListener("click", () => {
-  S.cfg.layers.push({ name: "New layer", enabled: true, clockwise: "", counter_clockwise: "", press: "", shift_clockwise: "",
-                      shift_counter_clockwise: "", speed: 1, accelerate: false, max_per_sec: 0, apps: [] });
+// "New layer": blank, or a ready-made template (apps already used by another layer are left off)
+const TEMPLATE_ICONS = { Discord: '<path d="M7 17c-2-1-3-3-3-7l2-4c2-1 4-1 4-1l.5 1h3l.5-1s2 0 4 1l2 4c0 4-1 6-3 7l-1-2"/><circle cx="9.5" cy="12" r="1"/><circle cx="14.5" cy="12" r="1"/>',
+                         YouTube: '<rect x="3" y="6" width="18" height="12" rx="4"/><path d="m10.5 9.5 4 2.5-4 2.5z"/>' };
+function renderAddMenu() {
+  const blank = `<button data-t="-1">${svg('<path d="M12 5v14M5 12h14"/>')}<div><b>Blank layer</b><small>Start from scratch</small></div></button>`;
+  $("add-menu").innerHTML = blank + S.templates.map((t, i) =>
+    `<button data-t="${i}">${svg(TEMPLATE_ICONS[t.layer.name] || ICONS.custom)}<div><b>${esc(t.layer.name)}</b><small>${esc(t.desc)}</small></div></button>`).join("");
+}
+$("add-layer").addEventListener("click", e => {
+  e.stopPropagation();
+  const m = $("add-menu"), b = $("add-layer");
+  m.style.top = `${b.offsetTop + b.offsetHeight + 4}px`;
+  m.hidden = !m.hidden;
+});
+document.addEventListener("click", e => { if (!e.target.closest("#add-menu")) $("add-menu").hidden = true; });
+$("add-menu").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  $("add-menu").hidden = true;
+  const t = +b.dataset.t;
+  const layer = t < 0
+    ? { name: "New layer", enabled: true, clockwise: "", counter_clockwise: "", press: "", shift_clockwise: "",
+        shift_counter_clockwise: "", speed: 1, accelerate: false, max_per_sec: 0, apps: [] }
+    : JSON.parse(JSON.stringify(S.templates[t].layer));
+  const taken = layer.apps.filter(a => S.cfg.layers.some(l => l.apps.includes(a)));
+  layer.apps = layer.apps.filter(a => !taken.includes(a));
+  S.cfg.layers.push(layer);
   stopRecording(); S.sel = S.cfg.layers.length - 1; S.page = "layer"; render(); changed();
-  $("layer-name").focus(); $("layer-name").select();
+  if (taken.length) toast(`Left off ${taken.map(appLabel).join(", ")}: another layer already switches on it`, true);
+  if (t < 0) { $("layer-name").focus(); $("layer-name").select(); }
 });
 
 // --- general page ---
@@ -575,7 +612,8 @@ function render() {
   document.documentElement.classList.toggle("dark", d.dark);
   document.documentElement.style.setProperty("--accent", d.accent);
   S.cfg = d.config; S.saved = JSON.stringify(d.config); S.sel = Math.min(d.current, d.config.layers.length - 1);
-  S.pairs = d.pairs; S.functions = d.functions;
+  S.pairs = d.pairs; S.functions = d.functions; S.templates = d.templates;
+  renderAddMenu();
   $("running").innerHTML = d.apps.map(a => `<option value="${esc(a)}">`).join("");
   render(); changed();
   S.cfg.layers.forEach((_, i) => { if (i !== S.sel) refreshPair(i); });

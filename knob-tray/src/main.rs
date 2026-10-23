@@ -194,17 +194,17 @@ impl App {
     /// Focus has stayed on one window for FOCUS_SETTLE_MS: give it its layer, or the manual layer if unlisted.
     fn on_focus_settled(&self) {
         unsafe { KillTimer(self.msg_hwnd(), TIMER_FOCUS) };
-        let Some(exe) = apps::foreground_exe() else { return };     // our own settings window, or unreadable
+        let Some((exe, title)) = apps::foreground_app() else { return };     // our own settings window, or unreadable
         let (changed, matched) = {
             let mut s = self.state.borrow_mut();
             if !s.enabled || !s.config.auto_switch { return; }
             let lists: Vec<Vec<String>> = s.config.layers.iter().map(|l| if l.enabled { l.apps.clone() } else { vec![] }).collect();
-            let (target, matched) = apps::pick_layer(&lists, &exe, s.manual_layer);
+            let (target, matched) = apps::pick_layer(&lists, &exe, &title, s.manual_layer);
             let changed = target != s.knob.layer;
             s.knob.layer = target;
             (changed, matched)
         };
-        if changed { self.flash_layer(matched.then_some(exe.as_str())); self.refresh_tray(); }
+        if changed { self.flash_layer(matched.as_deref()); self.refresh_tray(); }
     }
 
     fn toggle_auto_switch(&self) {

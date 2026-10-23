@@ -133,6 +133,7 @@ impl App {
                     "config": s.config, "current": s.knob.layer, "dark": theme::system_dark(), "accent": theme::accent(),
                     "pairs": PAIRS.iter().map(|p| json!({"name": p.0, "cw": p.1, "ccw": p.2, "press": p.3})).collect::<Vec<_>>(),
                     "functions": names::FUNCTIONS.iter().map(|f| f.0).collect::<Vec<_>>(),
+                    "templates": config::templates().into_iter().map(|(desc, layer)| json!({"desc": desc, "layer": layer})).collect::<Vec<_>>(),
                     "apps": apps::running_apps(),
                 })
             }

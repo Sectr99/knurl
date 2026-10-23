@@ -45,6 +45,20 @@ impl Default for Layer {
     }
 }
 
+/// Ready-made layers offered by "New layer": what it does, and the layer.
+pub fn templates() -> Vec<(&'static str, Layer)> {
+    let l = |name: &str, cw: &str, ccw: &str, press: &str, scw: &str, sccw: &str, app: &str| Layer {
+        name: name.into(), clockwise: cw.into(), counter_clockwise: ccw.into(), press: press.into(),
+        shift_clockwise: scw.into(), shift_counter_clockwise: sccw.into(), apps: vec![app.into()], ..Default::default()
+    };
+    vec![
+        ("Turn: channels \u{00B7} Tap + turn: servers \u{00B7} Press: mute. Active when Discord is focused.",
+         l("Discord", "Alt + Down Arrow", "Alt + Up Arrow", "Ctrl + Shift + M", "Ctrl + Alt + Down Arrow", "Ctrl + Alt + Up Arrow", "discord")),
+        ("Turn: YouTube volume \u{00B7} Tap + turn: skip 10 s \u{00B7} Press: play / pause. Active on YouTube tabs in any browser.",
+         l("YouTube", "Up Arrow", "Down Arrow", "K", "L", "J", "title:youtube")),
+    ]
+}
+
 impl Layer {
     fn from_pair(name: &str, i: usize) -> Layer {
         let p = PAIRS[i];
@@ -137,6 +151,12 @@ mod tests {
         assert!(l.enabled && l.speed == 1.0 && !l.accelerate && l.shift_clockwise.is_empty());
         assert_eq!(l.apps, vec!["chrome"]);
         assert_eq!(from_text(&serde_json::to_string(&c).unwrap()).unwrap(), c);   // round-trips
+    }
+
+    #[test]
+    fn templates_are_valid() {
+        let layers: Vec<Layer> = templates().into_iter().map(|t| t.1).collect();
+        assert!(validate(&Config { layers, ..Config::default() }).is_ok());
     }
 
     #[test]
