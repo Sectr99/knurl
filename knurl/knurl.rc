@@ -1,0 +1,3 @@
+// Icon 1 is what Explorer and the Start menu show for knurl.exe; the app loads both for the tray and window.
+1 ICON "assets/knob_on.ico"
+2 ICON "assets/knob_off.ico"
