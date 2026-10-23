@@ -1,11 +1,21 @@
+# Only the app's source is committed (knob-tray/). Everything below stays local.
+
 # Rust build output
 target/
 
-# Vendor software (proprietary binaries, ~150 MB) - kept locally only
-research/vendor/
+# Notes and handoff docs from working on the project
+HANDOFF.md
 
-# Bytecode extracted from the vendor's ble_helper.exe
-research/analysis/*.bin
+# Device research, probes, the vendor's apps and the Python prototype
+research/
+
+# One-off knob setup script (the app's tray menu "Set up knob" does this now)
+remap.py
+
+# Tool and editor state
+.claude/
+.vscode/
+.idea/
 
 # Logs and captured output
 *.log
