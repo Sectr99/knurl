@@ -1,6 +1,6 @@
 //! Settings window: layer list on the left, the selected layer's editor and general options on the right.
 //! Edits go to a draft; Save validates and applies it. Closing the window only hides it.
-use crate::{action, apps, config::{self, Config, Layer, PAIRS}, knob::Gesture, phrase, App, WM_RECORDED};
+use crate::{apps, config::{self, Config, Layer, PAIRS}, knob::Gesture, names, App, WM_RECORDED};
 use native_windows_gui as nwg;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use windows_sys::Win32::{
@@ -12,11 +12,12 @@ use windows_sys::Win32::{
 
 const GESTURES: [(&str, Gesture); 3] = [("Double-tap", Gesture::DoubleTap), ("Triple-tap", Gesture::TripleTap), ("Tray menu only", Gesture::TrayOnly)];
 const ACTION_FIELDS: [&str; 5] = ["Turn clockwise", "Turn counter-clockwise", "Press", "Tap + turn clockwise", "Tap + turn counter-clockwise"];
-const PLACEHOLDERS: [&str; 5] = ["e.g. scroll down", "e.g. scroll up", "e.g. middle click", "e.g. zoom in", "e.g. zoom out"];
-const EXAMPLES: &str = "Write what each action should do, in plain words. For example:\r\n\
-    \x20  scroll down 3  \u{00B7}  zoom in  \u{00B7}  next track  \u{00B7}  volume up  \u{00B7}  copy  \u{00B7}  undo  \u{00B7}  new tab  \u{00B7}  middle click\r\n\
-    \x20  press ctrl shift z  \u{00B7}  hold shift and press tab  \u{00B7}  open notepad  \u{00B7}  go to youtube.com  \u{00B7}  type hello\r\n\
-    \x20  copy then paste (chain steps with \u{201C}then\u{201D})     Leave a box empty to do nothing. Record captures a shortcut.";
+const PLACEHOLDERS: [&str; 5] = ["e.g. Scroll Down", "e.g. Scroll Up", "e.g. Middle Click", "e.g. Zoom +", "e.g. Zoom -"];
+const EXAMPLES: &str = "Write key names joined with +, or a function name. Separate steps with a comma.\r\n\
+    Keys:  Ctrl + Shift + Z  \u{00B7}  Alt + Tab  \u{00B7}  F5  \u{00B7}  Page Up  \u{00B7}  Enter  \u{00B7}  Esc  \u{00B7}  Space  \u{00B7}  Up Arrow  \u{00B7}  [  \u{00B7}  Shift + Scroll Up\r\n\
+    Functions:  Scroll Up / Down / Left / Right  \u{00B7}  Zoom +  \u{00B7}  Zoom -  \u{00B7}  Zoom Reset  \u{00B7}  Volume +  \u{00B7}  Volume -  \u{00B7}  Mute\r\n\
+    \x20  Next Track  \u{00B7}  Previous Track  \u{00B7}  Play/Pause  \u{00B7}  Stop  \u{00B7}  Left / Right / Middle / Double Click\r\n\
+    \x20  Copy  \u{00B7}  Cut  \u{00B7}  Paste  \u{00B7}  Undo  \u{00B7}  Redo  \u{00B7}  Select All  \u{00B7}  Save  \u{00B7}  Open notepad  \u{00B7}  Type hello";
 
 #[derive(Default)]
 pub struct SettingsUi {
@@ -173,8 +174,8 @@ impl App {
         let ui = &self.ui.s;
         let (cw, ccw) = (ui.actions[0].text(), ui.actions[1].text());
         let found = PAIRS.iter().enumerate().skip(1).find_map(|(i, p)| {
-            if phrase::same(p.1, &cw) && phrase::same(p.2, &ccw) { Some((i, false)) }
-            else if phrase::same(p.1, &ccw) && phrase::same(p.2, &cw) { Some((i, true)) }
+            if names::same(p.1, &cw) && names::same(p.2, &ccw) { Some((i, false)) }
+            else if names::same(p.1, &ccw) && names::same(p.2, &cw) { Some((i, true)) }
             else { None }
         });
         let (i, reversed) = found.unwrap_or((0, false));
@@ -184,12 +185,9 @@ impl App {
         }
     }
 
-    /// The line under an action box: what it will do, or why it isn't understood.
+    /// The line under an action box: empty when the names are recognised, otherwise what's wrong.
     fn update_preview(&self, i: usize) {
-        let text = self.ui.s.actions[i].text();
-        let line = if text.trim().is_empty() { String::new() } else {
-            match phrase::describe(&text) { Ok(d) => format!("\u{2713}  {d}"), Err(e) => format!("\u{2717}  {e}") }
-        };
+        let line = match names::parse(&self.ui.s.actions[i].text()) { Ok(_) => String::new(), Err(e) => format!("\u{2717}  {e}") };
         self.ui.s.previews[i].set_text(&line);
     }
 
@@ -296,7 +294,7 @@ impl App {
         let Some(field) = self.state.borrow_mut().recording.take() else { return };
         let ui = &self.ui.s;
         if vk == 0x1B && mods == 0 { ui.status.set_text("Recording cancelled"); return; }
-        match action::combo_name(vk, mods & 1 != 0, mods & 2 != 0, mods & 4 != 0, mods & 8 != 0) {
+        match names::combo_display(vk, mods & 1 != 0, mods & 2 != 0, mods & 4 != 0, mods & 8 != 0) {
             None => ui.status.set_text("That key can't be used in an action"),
             Some(combo) => {
                 ui.actions[field].set_text(&combo);                  // preview and "Turning does" follow via OnTextInput

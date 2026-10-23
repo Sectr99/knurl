@@ -1,5 +1,5 @@
 //! Layers and settings, stored as JSON in %APPDATA%\RotaryKnob\config.json.
-use crate::{action, apps, knob::Gesture, phrase};
+use crate::{action, apps, knob::Gesture, names};
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, time::SystemTime};
 
@@ -8,17 +8,17 @@ pub const APP_NAME: &str = "RotaryKnob";
 /// "Turning does" choices: name, clockwise, counter-clockwise, suggested press. Index 0 is "Custom".
 pub const PAIRS: &[(&str, &str, &str, &str)] = &[
     ("Custom", "", "", ""),
-    ("Scroll up / down", "scroll down", "scroll up", "middle click"),
-    ("Scroll left / right", "scroll right", "scroll left", ""),
-    ("Zoom in / out", "zoom in", "zoom out", "reset zoom"),
-    ("Volume", "volume up", "volume down", "mute"),
-    ("Tracks (next / previous)", "next track", "previous track", "play/pause"),
-    ("Undo / redo", "redo", "undo", ""),
-    ("Arrow up / down", "down arrow", "up arrow", "press enter"),
-    ("Arrow left / right", "right arrow", "left arrow", "press enter"),
-    ("Page up / down", "page down", "page up", "press home"),
-    ("Browser tabs", "next tab", "previous tab", "new tab"),
-    ("Brush size", "bigger brush", "smaller brush", ""),
+    ("Scroll up / down", "Scroll Down", "Scroll Up", "Middle Click"),
+    ("Scroll left / right", "Scroll Right", "Scroll Left", ""),
+    ("Zoom", "Zoom +", "Zoom -", "Zoom Reset"),
+    ("Volume", "Volume +", "Volume -", "Mute"),
+    ("Tracks", "Next Track", "Previous Track", "Play/Pause"),
+    ("Undo / redo", "Redo", "Undo", ""),
+    ("Arrow up / down", "Down Arrow", "Up Arrow", "Enter"),
+    ("Arrow left / right", "Right Arrow", "Left Arrow", "Enter"),
+    ("Page up / down", "Page Down", "Page Up", "Home"),
+    ("Browser tabs", "Ctrl + Tab", "Ctrl + Shift + Tab", "Ctrl + T"),
+    ("Brush size", "]", "[", ""),
 ];
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
@@ -89,7 +89,7 @@ pub fn validate(c: &Config) -> Result<Vec<Parsed>, String> {
         if l.name.trim().is_empty() { return Err("Every layer needs a name.".to_string()); }
         if !(0.1..=10.0).contains(&l.speed) { return Err(format!("Layer '{}': speed must be between 0.1 and 10.", l.name)); }
         if l.max_per_sec > 50 { return Err(format!("Layer '{}': max per second must be between 0 (no limit) and 50.", l.name)); }
-        let p = |what: &str, s: &str| phrase::parse(s).map_err(|e| format!("Layer '{}', {what}: {e}", l.name));
+        let p = |what: &str, s: &str| names::parse(s).map_err(|e| format!("Layer '{}', {what}: {e}", l.name));
         Ok(Parsed { cw: p("turn clockwise", &l.clockwise)?, ccw: p("turn counter-clockwise", &l.counter_clockwise)?,
                     press: p("press", &l.press)?, shift_cw: p("tap + turn clockwise", &l.shift_clockwise)?,
                     shift_ccw: p("tap + turn counter-clockwise", &l.shift_counter_clockwise)? })

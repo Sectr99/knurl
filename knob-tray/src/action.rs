@@ -60,13 +60,6 @@ pub fn key_name(vk: u8) -> Option<String> {
     }
 }
 
-/// "ctrl+shift+z" from a recorded key and the modifiers held with it.
-pub fn combo_name(vk: u8, ctrl: bool, shift: bool, alt: bool, win: bool) -> Option<String> {
-    let mut s = String::new();
-    for (on, m) in [(ctrl, "ctrl+"), (shift, "shift+"), (alt, "alt+"), (win, "win+")] { if on { s.push_str(m); } }
-    Some(s + &key_name(vk)?)
-}
-
 fn parse_step(text: &str) -> Result<Step, String> {
     let lower = text.trim().to_ascii_lowercase();
     if let Some(target) = lower.strip_prefix("run:") {
@@ -191,7 +184,6 @@ mod tests {
         for name in ["a", "7", "f13", "pageup", "playpause", "[", "/", "plus"] {
             assert_eq!(key_name(key_code(name).unwrap()).as_deref(), Some(name));
         }
-        assert_eq!(combo_name(b'Z', true, true, false, false).as_deref(), Some("ctrl+shift+z"));
         assert_eq!(key_name(0x10), None);                            // bare Shift isn't an action
     }
 }
