@@ -1,0 +1,12 @@
+# Rust build output
+target/
+
+# Vendor software (proprietary binaries, ~150 MB) - kept locally only
+research/vendor/
+
+# Bytecode extracted from the vendor's ble_helper.exe
+research/analysis/*.bin
+
+# Logs and captured output
+*.log
+*.out
