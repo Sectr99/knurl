@@ -2,7 +2,8 @@
 //! ("Ctrl + Shift + Z", "Page Up", "F5"), function names ("Zoom +", "Scroll Down", "Volume -", "Copy"),
 //! "Open …" and "Type …". Steps are separated with ", ". Matching ignores case and spaces, and the older
 //! syntax (ctrl+z, wheel:-120, next) is still accepted.
-use crate::action::{self, Action};
+use crate::action::{self, Action, Kind};
+use serde::Serialize;
 
 /// Function names and what they do. Modifiers may go in front: "Shift + Scroll Up".
 pub const FUNCTIONS: &[(&str, &str)] = &[
@@ -54,16 +55,21 @@ fn is_modifier(m: &str) -> Option<&'static str> {
     match m { "ctrl" | "control" => Some("ctrl"), "shift" => Some("shift"), "alt" => Some("alt"), "win" | "windows" => Some("win"), _ => None }
 }
 
+/// "Shift + Scroll Up" -> (["shift"], index of Scroll Up in FUNCTIONS).
+fn function_parts(c: &str) -> Option<(Vec<&'static str>, usize)> {
+    FUNCTIONS.iter().enumerate().find_map(|(i, (name, syntax))| {
+        let prefix = c.strip_suffix(&compact(name))?;
+        if prefix.is_empty() { return Some((vec![], i)); }
+        if syntax.contains(';') { return None; }          // no modifiers on multi-step functions
+        let mods: Option<Vec<&'static str>> = prefix.strip_suffix('+')?.split('+').map(is_modifier).collect();
+        Some((mods?, i))
+    })
+}
+
 /// "Zoom +", "Shift + Scroll Up" -> syntax.
 fn function(c: &str) -> Option<String> {
-    FUNCTIONS.iter().find_map(|(name, syntax)| {
-        let name = compact(name);
-        let prefix = c.strip_suffix(&name)?;
-        if prefix.is_empty() { return Some(syntax.to_string()); }
-        if syntax.contains(';') { return None; }          // no modifiers on multi-step functions
-        let mods: Option<Vec<&str>> = prefix.strip_suffix('+')?.split('+').map(is_modifier).collect();
-        Some(mods?.iter().map(|m| format!("{m}+")).collect::<String>() + syntax)
-    })
+    let (mods, i) = function_parts(c)?;
+    Some(mods.iter().map(|m| format!("{m}+")).collect::<String>() + FUNCTIONS[i].1)
 }
 
 /// "Ctrl + Shift + Z", "Page Up", "Ctrl + -" -> syntax.
@@ -103,14 +109,19 @@ fn edit_distance(a: &str, b: &str) -> usize {
     row[b.len()]
 }
 
-fn unknown(step: &str) -> String {
+/// The closest known name to a step that wasn't recognised.
+fn suggest(step: &str) -> Option<String> {
     let c = compact(step);
     let known = FUNCTIONS.iter().map(|f| f.0.to_string())
         .chain(KEY_NAMES.iter().map(|k| k.0.to_string()))
         .chain(["Home", "End", "Insert", "Delete", "Backspace", "Tab", "Enter", "Esc", "Space", "Plus"].map(String::from));
-    match known.map(|k| (edit_distance(&c, &compact(&k)), k)).min() {
-        Some((d, k)) if d <= (c.len() / 4).max(2) => format!("Unknown: \u{2018}{step}\u{2019}. Did you mean \u{2018}{k}\u{2019}?"),
-        _ => format!("Unknown: \u{2018}{step}\u{2019}. Use key names like Ctrl + Z or functions like Zoom +."),
+    known.map(|k| (edit_distance(&c, &compact(&k)), k)).min().filter(|(d, _)| *d <= (c.len() / 4).max(2)).map(|(_, k)| k)
+}
+
+fn unknown(step: &str) -> String {
+    match suggest(step) {
+        Some(k) => format!("Unknown: \u{2018}{step}\u{2019}. Did you mean \u{2018}{k}\u{2019}?"),
+        None => format!("Unknown: \u{2018}{step}\u{2019}. Use key names like Ctrl + Z or functions like Zoom +."),
     }
 }
 
@@ -125,22 +136,97 @@ fn step_syntax(step: &str) -> Result<String, String> {
         .ok_or_else(|| unknown(step))
 }
 
-/// Settings text -> action syntax. Steps are separated by ", " or ';'; "Type …" takes the rest of the box.
-pub fn to_syntax(input: &str) -> Result<String, String> {
+/// A box split into steps: separated by ", " or ';', except that "Type …" takes the rest of the box.
+fn split_steps(input: &str) -> Vec<&str> {
     let mut out = vec![];
     let mut rest = input.trim();
     while !rest.is_empty() {
-        if rest.to_lowercase().starts_with("type ") || rest.to_lowercase().starts_with("type:") {
-            out.push(if rest.as_bytes()[4] == b':' { rest.to_string() } else { step_syntax(rest)? });
-            break;
-        }
+        let lower = rest.to_lowercase();
+        if lower.starts_with("type ") || lower.starts_with("type:") { out.push(rest); break; }
         let cut = [", ", ";"].iter().filter_map(|sep| rest.find(sep).map(|i| (i, sep.len()))).min();
         let (head, tail) = match cut { Some((i, n)) => (&rest[..i], &rest[i + n..]), None => (rest, "") };
-        let s = step_syntax(head)?;
-        if !s.is_empty() { out.push(s); }
+        if !head.trim().is_empty() { out.push(head.trim()); }
         rest = tail.trim_start();
     }
-    Ok(out.join("; "))
+    out
+}
+
+/// Settings text -> action syntax.
+pub fn to_syntax(input: &str) -> Result<String, String> {
+    let steps: Result<Vec<String>, String> = split_steps(input).into_iter()
+        .map(|st| if st.len() > 5 && st.as_bytes()[4] == b':' && st[..4].eq_ignore_ascii_case("type") { Ok(st.to_string()) } else { step_syntax(st) })
+        .collect();
+    Ok(steps?.into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("; "))
+}
+
+// --- structured view for the settings page: keycaps, function chips, open / type ---
+
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(tag = "t", rename_all = "lowercase")]
+pub enum StepView {
+    Keys { keys: Vec<String> },
+    Func { mods: Vec<String>, name: String },
+    Open { target: String },
+    Type { text: String },
+}
+
+/// Why a box isn't valid: the message, the step at fault, and a replacement for it if one is close.
+#[derive(Serialize, Debug)]
+pub struct Problem { pub message: String, pub step: String, pub fix: Option<String> }
+
+fn mod_label(m: &str) -> String {
+    match m { "ctrl" => "Ctrl", "shift" => "Shift", "alt" => "Alt", _ => "Win" }.to_string()
+}
+
+/// Media keys show as their function names; everything else as keycaps.
+fn key_view(mods: Vec<String>, vk: u8) -> StepView {
+    match key_display(vk) {
+        Some(name) if (0xAD..=0xB3).contains(&vk) => StepView::Func { mods, name },
+        Some(k) => StepView::Keys { keys: mods.into_iter().chain([k]).collect() },
+        None => StepView::Keys { keys: mods.into_iter().chain([format!("key {vk}")]).collect() },
+    }
+}
+
+/// A step in older syntax (wheel:-120, click:middle, next): show it with the matching function name.
+fn view_from_syntax(step: &str) -> Option<StepView> {
+    let a = action::parse(step).ok()?;
+    let st = a.0.first()?;
+    let mods: Vec<String> = st.mods.iter().map(|&m| mod_label(match m { action::CTRL => "ctrl", action::SHIFT => "shift", action::ALT => "alt", _ => "win" })).collect();
+    Some(match &st.kind {
+        Kind::Key(vk) => key_view(mods, *vk),
+        Kind::Run(t) => StepView::Open { target: t.clone() },
+        Kind::Type(t) => StepView::Type { text: t.clone() },
+        kind => {
+            let name = FUNCTIONS.iter().find(|f| action::parse(f.1).ok().and_then(|a| a.0.first().map(|s| s.kind == *kind && s.mods.is_empty())) == Some(true))
+                .map_or_else(|| step.to_string(), |f| f.0.to_string());
+            StepView::Func { mods, name }
+        }
+    })
+}
+
+fn step_view(step: &str) -> Option<StepView> {
+    let lower = step.to_lowercase();
+    if lower.starts_with("type ") || lower.starts_with("type:") { return Some(StepView::Type { text: step[5..].to_string() }); }
+    if lower.starts_with("open ") && !step[5..].trim().is_empty() { return Some(StepView::Open { target: step[5..].trim().to_string() }); }
+    let c = compact(step);
+    if let Some((mods, i)) = function_parts(&c) {
+        return Some(StepView::Func { mods: mods.iter().map(|m| mod_label(m)).collect(), name: FUNCTIONS[i].0.to_string() });
+    }
+    if let Some(syntax) = keys(&c) {
+        let (mods, key) = syntax.rsplit_once('+').filter(|(_, k)| !k.is_empty()).map_or((vec![], syntax.as_str()), |(m, k)| (m.split('+').map(mod_label).collect(), k));
+        if let Some(vk) = action::key_code(key) { return Some(key_view(mods, vk)); }   // else older syntax, below
+    }
+    view_from_syntax(step)
+}
+
+/// For the settings page: what each step of a box is, or what's wrong with it.
+pub fn check(input: &str) -> Result<Vec<StepView>, Problem> {
+    split_steps(input).into_iter().map(|st| {
+        match (to_syntax(st), step_view(st)) {
+            (Ok(_), Some(v)) => Ok(v),
+            _ => Err(Problem { message: unknown(st), step: st.to_string(), fix: suggest(st) }),
+        }
+    }).collect()
 }
 
 /// Settings text -> runnable action.
@@ -186,6 +272,22 @@ mod tests {
         assert!(to_syntax("Ctrl").is_err());                                   // a modifier alone isn't an action
         assert!(to_syntax("Ctrl + Double Click").is_err());
         assert!(to_syntax("make a sandwich").unwrap_err().contains("key names"));
+    }
+
+    #[test]
+    fn page_views() {
+        let v = |s: &str| check(s).unwrap();
+        assert_eq!(v("Ctrl + Shift + Z"), vec![StepView::Keys { keys: vec!["Ctrl".into(), "Shift".into(), "Z".into()] }]);
+        assert_eq!(v("Shift + Scroll Up"), vec![StepView::Func { mods: vec!["Shift".into()], name: "Scroll Up".into() }]);
+        assert_eq!(v("wheel:-120"), vec![StepView::Func { mods: vec![], name: "Scroll Down".into() }]);
+        assert_eq!(v("next"), vec![StepView::Func { mods: vec![], name: "Next Track".into() }]);
+        assert_eq!(v("ctrl+z"), vec![StepView::Keys { keys: vec!["Ctrl".into(), "Z".into()] }]);
+        assert_eq!(v("Ctrl + +"), vec![StepView::Keys { keys: vec!["Ctrl".into(), "Plus".into()] }]);
+        assert_eq!(v("Copy, Open notepad, Type hi, there").len(), 3);
+        assert_eq!(v("Page Up"), vec![StepView::Keys { keys: vec!["Page Up".into()] }]);
+        let p = check("Copy, Zom +").unwrap_err();
+        assert_eq!((p.step.as_str(), p.fix.as_deref()), ("Zom +", Some("Zoom +")));
+        assert!(check("make a sandwich").unwrap_err().fix.is_none());
     }
 
     #[test]

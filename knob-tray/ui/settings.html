@@ -1,0 +1,585 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Rotary knob settings</title>
+<style>
+  :root {
+    --accent: #0078d4;
+    --text: #1b1b1b; --muted: #5c5c5c; --faint: #8a8a8a;
+    --bg: #f3f3f3; --side: #ebebeb; --panel: #fbfbfb; --panel-hover: #ffffff;
+    --field: #ffffff; --field-border: rgba(0,0,0,.12); --border: rgba(0,0,0,.07);
+    --kbd: #f7f7f7; --kbd-edge: rgba(0,0,0,.18); --chip: color-mix(in srgb, var(--accent) 13%, var(--field));
+    --danger: #c42b1c; --ok: #0f7b0f; --shadow: 0 1px 2px rgba(0,0,0,.05), 0 2px 6px rgba(0,0,0,.04);
+  }
+  html.dark {
+    --text: #f3f3f3; --muted: #b8b8b8; --faint: #8b8b8b;
+    --bg: #202020; --side: #1b1b1b; --panel: #2b2b2b; --panel-hover: #333333;
+    --field: #1e1e1e; --field-border: rgba(255,255,255,.09); --border: rgba(255,255,255,.06);
+    --kbd: #3a3a3a; --kbd-edge: rgba(0,0,0,.55); --chip: color-mix(in srgb, var(--accent) 30%, var(--panel));
+    --danger: #ff99a4; --ok: #6ccb5f; --shadow: 0 1px 2px rgba(0,0,0,.3);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font: 14px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--text);
+         background: var(--bg); user-select: none; -webkit-font-smoothing: antialiased; }
+  button, input { font: inherit; color: inherit; }
+  svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  .app { display: grid; grid-template-columns: 264px 1fr; grid-template-rows: 1fr auto; grid-template-areas: "side main" "side bar"; height: 100vh; }
+
+  /* --- sidebar --- */
+  .side { grid-area: side; background: var(--side); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 18px 12px 12px; gap: 6px; min-height: 0; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 14px; }
+  .brand .logo { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; color: #fff;
+                 box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); }
+  .brand .logo svg { width: 18px; height: 18px; stroke-width: 2.4; }
+  .brand b { display: block; font-size: 15px; }
+  .brand span { font-size: 12px; color: var(--muted); }
+  .label { font-size: 12px; font-weight: 600; color: var(--muted); padding: 4px 10px; letter-spacing: .02em; }
+  #layers { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; min-height: 0; padding-right: 2px; }
+  .layer { text-align: left; border: 1px solid transparent; background: transparent; border-radius: 8px; padding: 9px 10px 9px 14px;
+           cursor: default; position: relative; transition: background .12s; }
+  .layer:hover { background: var(--panel); }
+  .layer.sel { background: var(--panel-hover); border-color: var(--border); box-shadow: var(--shadow); }
+  .layer.sel::before { content: ""; position: absolute; left: 4px; top: 12px; bottom: 12px; width: 3px; border-radius: 3px; background: var(--accent); }
+  .layer .name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .layer .lnum { font-size: 11px; color: var(--faint); font-weight: 400; margin-left: auto; }
+  .layer .sum { font-size: 12px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .layer .apps { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+  .layer.off { opacity: .55; }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--chip); }
+  .grow { flex: 1; }
+  .side-btn { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; padding: 9px 12px; border-radius: 8px; text-align: left; cursor: default; }
+  .side-btn:hover { background: var(--panel); }
+  .side-btn.sel { background: var(--panel-hover); box-shadow: var(--shadow); }
+  .side-btn.add { color: var(--accent); font-weight: 600; }
+  html.dark .side-btn.add { color: color-mix(in srgb, var(--accent) 55%, white); }
+
+  /* --- main --- */
+  main { grid-area: main; overflow-y: auto; padding: 22px 28px 28px; min-height: 0; }
+  .page { display: flex; flex-direction: column; gap: 14px; max-width: 900px; margin: 0 auto; animation: fade .18s ease-out; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 2px; }
+  .title { flex: 1; font-size: 26px; font-weight: 600; border: 1px solid transparent; background: transparent; border-radius: 8px; padding: 2px 8px; margin-left: -9px; min-width: 0; }
+  .title:hover { background: var(--panel); }
+  .title:focus { outline: none; background: var(--field); border-color: var(--field-border); border-bottom: 2px solid var(--accent); }
+  h1 { font-size: 26px; font-weight: 600; margin: 2px 0; }
+  h2 { font-size: 14px; font-weight: 600; margin: 0; }
+  .muted { color: var(--muted); font-size: 12.5px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
+  .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .card-head .muted { margin-left: auto; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .icon-btn { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid transparent; background: transparent; border-radius: 6px; color: var(--muted); }
+  .icon-btn:hover { background: var(--panel-hover); border-color: var(--border); color: var(--text); }
+  .icon-btn.danger:hover { color: var(--danger); }
+  .icon-btn:disabled { opacity: .35; pointer-events: none; }
+
+  /* switch */
+  .switch { display: inline-flex; align-items: center; gap: 10px; cursor: default; }
+  .switch input { appearance: none; width: 40px; height: 20px; border-radius: 10px; border: 1px solid var(--faint); position: relative; margin: 0; transition: .15s; background: transparent; }
+  .switch input::after { content: ""; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--muted); top: 3px; left: 4px; transition: .15s; }
+  .switch input:checked { background: var(--accent); border-color: var(--accent); }
+  .switch input:checked::after { left: 22px; background: #fff; }
+  .switch:hover input::after { transform: scale(1.12); }
+
+  /* tiles */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 8px; }
+  .tile { border: 1px solid var(--border); background: var(--panel-hover); border-radius: 10px; padding: 12px 10px 10px; display: flex; flex-direction: column;
+          align-items: flex-start; gap: 8px; text-align: left; transition: transform .1s, border-color .12s, background .12s; }
+  .tile:hover { transform: translateY(-1px); border-color: var(--field-border); }
+  .tile svg { width: 22px; height: 22px; color: var(--muted); }
+  .tile span { font-size: 12.5px; font-weight: 500; line-height: 1.2; }
+  .tile.sel { border-color: var(--accent); background: var(--chip); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .tile.sel svg { color: var(--accent); }
+  html.dark .tile.sel svg { color: color-mix(in srgb, var(--accent) 55%, white); }
+
+  /* action rows */
+  .actions { display: flex; flex-direction: column; gap: 4px; }
+  .action { display: grid; grid-template-columns: 210px 1fr auto; align-items: start; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border); }
+  .action:first-child { border-top: 0; }
+  .alabel { display: flex; align-items: center; gap: 10px; padding-top: 7px; }
+  .alabel .glyph { width: 30px; height: 30px; border-radius: 8px; background: var(--panel-hover); border: 1px solid var(--border); display: grid; place-items: center; color: var(--muted); }
+  .alabel b { font-weight: 500; }
+  .alabel small { display: block; color: var(--faint); font-size: 11.5px; margin-top: -1px; }
+  .field { position: relative; min-height: 36px; border-radius: 7px; background: var(--field); border: 1px solid var(--field-border); border-bottom-color: var(--faint); transition: border-color .12s; }
+  .field:hover { border-color: var(--faint); }
+  .field input { width: 100%; height: 34px; border: 0; background: transparent; padding: 0 11px; outline: none; font-family: inherit; }
+  .field .chips { position: absolute; inset: 0; display: none; align-items: center; gap: 5px; padding: 0 9px; overflow: hidden; white-space: nowrap; cursor: text; background: var(--field); border-radius: 7px; }
+  .field.show-chips .chips { display: flex; }
+  .field.show-chips input { color: transparent; }
+  .field.focus { border-bottom: 2px solid var(--accent); }
+  .field.bad { border-color: var(--danger); }
+  .field.recording { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 12%, transparent); } }
+  .err { grid-column: 2 / 4; font-size: 12.5px; color: var(--danger); display: flex; gap: 8px; align-items: center; margin-top: -4px; }
+  .err:empty { display: none; }
+  .fix { border: 0; background: var(--chip); color: var(--text); border-radius: 12px; padding: 1px 10px; font-size: 12px; }
+  .fix:hover { filter: brightness(1.1); }
+  kbd { font: 12px/1 "Segoe UI Variable Text", "Segoe UI", sans-serif; padding: 5px 8px 4px; border-radius: 5px; background: var(--kbd); border: 1px solid var(--kbd-edge);
+        border-bottom-width: 2px; min-width: 24px; text-align: center; }
+  .plus { color: var(--faint); font-size: 11px; }
+  .fn { font-size: 12.5px; font-weight: 500; padding: 4px 10px; border-radius: 12px; background: var(--chip); display: inline-flex; align-items: center; gap: 5px; }
+  .fn svg { width: 13px; height: 13px; }
+  .arg { font-size: 12.5px; color: var(--muted); max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  .then { color: var(--faint); margin: 0 3px; }
+  .rec { height: 36px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border-radius: 7px; border: 1px solid var(--field-border); background: var(--panel-hover); }
+  .rec:hover { border-color: var(--faint); }
+  .rec.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* feel + apps */
+  .row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--border); }
+  .row:first-of-type { border-top: 0; }
+  .row > .grow { min-width: 0; }
+  .row small { display: block; color: var(--faint); font-size: 11.5px; }
+  input[type=range] { appearance: none; width: 170px; height: 4px; border-radius: 2px; background: var(--field-border); outline: none; }
+  input[type=range]::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 4px solid var(--field); box-shadow: 0 0 0 1px var(--field-border); }
+  .val { min-width: 54px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .num { width: 70px; height: 32px; border-radius: 6px; border: 1px solid var(--field-border); background: var(--field); padding: 0 8px; outline: none; }
+  .num:focus, .text-in:focus { border-bottom: 2px solid var(--accent); }
+  .chiplist { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; align-items: center; }
+  .appchip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 11px; border-radius: 14px; background: var(--chip); font-size: 12.5px; }
+  .appchip button { border: 0; background: transparent; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); }
+  .appchip button:hover { background: var(--panel-hover); color: var(--text); }
+  .appchip svg { width: 12px; height: 12px; }
+  .add-row { display: flex; gap: 8px; margin-top: 10px; }
+  .text-in { flex: 1; height: 32px; border-radius: 6px; border: 1px solid var(--field-border); background: var(--field); padding: 0 10px; outline: none; min-width: 0; }
+  .btn { height: 32px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--field-border); background: var(--panel-hover); display: inline-flex; align-items: center; gap: 7px; }
+  .btn:hover { border-color: var(--faint); }
+  .btn.accent { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
+  .btn.accent:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: .45; pointer-events: none; }
+  .empty { color: var(--faint); font-size: 12.5px; }
+
+  /* general */
+  .seg { display: inline-flex; background: var(--field); border: 1px solid var(--field-border); border-radius: 8px; padding: 3px; gap: 2px; }
+  .seg button { border: 0; background: transparent; padding: 6px 14px; border-radius: 6px; }
+  .seg button.sel { background: var(--panel-hover); box-shadow: var(--shadow); font-weight: 600; }
+  .ref { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ref .fn { font-weight: 400; }
+
+  /* footer + toast */
+  .bar { grid-area: bar; display: flex; align-items: center; gap: 10px; padding: 12px 28px; border-top: 1px solid var(--border); background: var(--side); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: none; }
+  .bar.dirty .dot { display: block; }
+  #status { color: var(--muted); font-size: 13px; }
+  #toast { position: fixed; right: 28px; bottom: 72px; transform: translateY(10px); opacity: 0; transition: .22s; pointer-events: none;
+           background: var(--panel-hover); border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 10px 16px; border-radius: 10px;
+           display: flex; gap: 10px; align-items: center; max-width: 70vw; backdrop-filter: blur(20px); }
+  #toast.show { opacity: 1; transform: none; }
+  #toast.error { color: var(--danger); }
+  ::-webkit-scrollbar { width: 10px; } ::-webkit-scrollbar-thumb { background: var(--field-border); border-radius: 5px; border: 3px solid transparent; background-clip: content-box; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 24 24"><path d="M12 12 16.5 7.5"/></svg></div>
+      <div><b>Rotary knob</b><span id="brand-sub"></span></div>
+    </div>
+    <div class="label">Layers</div>
+    <div id="layers"></div>
+    <button class="side-btn add" id="add-layer"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New layer</button>
+    <div class="grow"></div>
+    <button class="side-btn" id="nav-general"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>General</button>
+  </aside>
+
+  <main>
+    <section class="page" id="page-layer">
+      <div class="title-row">
+        <input class="title" id="layer-name" spellcheck="false" maxlength="40">
+        <label class="switch"><input type="checkbox" id="layer-enabled"><span class="muted">Enabled</span></label>
+        <button class="icon-btn" id="move-up" title="Move up"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
+        <button class="icon-btn" id="move-down" title="Move down"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+        <button class="icon-btn danger" id="delete" title="Delete layer"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Turning</h2>
+          <label class="switch" style="margin-left:auto"><span class="muted">Reverse direction</span><input type="checkbox" id="reverse"></label>
+        </div>
+        <div class="tiles" id="tiles"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Actions</h2><span class="muted">Key names joined with +, or a function name. Separate steps with a comma.</span></div>
+        <div class="actions" id="actions"></div>
+      </div>
+
+      <div class="cols">
+        <div class="card">
+          <div class="card-head"><h2>Feel</h2></div>
+          <div class="row"><div class="grow">Speed<small>Scroll distance and key repeats per click</small></div>
+            <input type="range" id="speed" min="0.25" max="5" step="0.25"><span class="val" id="speed-val"></span></div>
+          <div class="row"><div class="grow">Accelerate<small>Go further when you spin quickly</small></div>
+            <label class="switch"><input type="checkbox" id="accel"></label></div>
+          <div class="row"><div class="grow">Max per second<small>0 means no limit</small></div>
+            <input class="num" type="number" id="maxps" min="0" max="50"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Apps</h2><span class="muted">Switch to this layer automatically</span></div>
+          <div class="chiplist" id="app-chips"></div>
+          <div class="add-row">
+            <input class="text-in" id="app-input" list="running" placeholder="Program name, e.g. chrome" spellcheck="false">
+            <datalist id="running"></datalist>
+            <button class="btn" id="app-add">Add</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" id="page-general" hidden>
+      <div class="title-row"><h1>General</h1></div>
+      <div class="card">
+        <div class="card-head"><h2>Switching layers</h2></div>
+        <div class="row"><div class="grow">Gesture<small>How the knob's press switches to the next layer</small></div>
+          <div class="seg" id="gesture"></div></div>
+        <div class="row"><div class="grow">Tap window<small>How long to wait for another tap before a press counts</small></div>
+          <input type="range" id="window" min="100" max="1000" step="10"><span class="val" id="window-val"></span></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Backup</h2><span class="muted">Save or load a set of layers</span></div>
+        <div style="display:flex; gap:8px">
+          <button class="btn" id="import"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>Import…</button>
+          <button class="btn" id="export"><svg viewBox="0 0 24 24"><path d="M12 15V3m0 0L8 7m4-4 4 4M5 21h14"/></svg>Export…</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Names you can use</h2></div>
+        <div class="muted" style="margin-bottom:10px">Any key as written on the keyboard, joined with + &nbsp;
+          <kbd>Ctrl</kbd> <span class="plus">+</span> <kbd>Shift</kbd> <span class="plus">+</span> <kbd>Z</kbd> &nbsp;
+          <kbd>Page Up</kbd> &nbsp;<kbd>F5</kbd> &nbsp;<kbd>Up Arrow</kbd>. &nbsp;Plus these functions, and <span class="fn">Open …</span> <span class="fn">Type …</span></div>
+        <div class="ref" id="ref"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="bar" id="bar">
+    <span class="dot"></span><span id="status">All changes saved</span>
+    <div class="grow"></div>
+    <button class="btn" id="revert" disabled>Revert</button>
+    <button class="btn accent" id="save" disabled>Save</button>
+  </footer>
+</div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+// --- bridge: page -> Rust {id, cmd, ...}; Rust -> knob.reply(id, data) / knob.event(name, data) ---
+const pending = new Map();
+let nextId = 0;
+const handlers = {};
+window.knob = {
+  reply(id, data) { const r = pending.get(id); pending.delete(id); if (r) r(data); },
+  event(name, data) { if (handlers[name]) handlers[name](data); },
+};
+function call(cmd, args = {}) {
+  return new Promise(resolve => { const id = ++nextId; pending.set(id, resolve); window.ipc.postMessage(JSON.stringify({ id, cmd, ...args })); });
+}
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const svg = d => `<svg viewBox="0 0 24 24">${d}</svg>`;
+
+const ICONS = {
+  custom: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  scroll: '<rect x="7" y="3" width="10" height="18" rx="5"/><path d="M12 7v3"/>',
+  scrollh: '<path d="M4 12h16M7 9l-3 3 3 3M17 9l3 3-3 3"/>',
+  zoom: '<circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5M11 8v6M8 11h6"/>',
+  volume: '<path d="M4 10v4h4l5 4V6L8 10H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>',
+  tracks: '<path d="M5 6v12l9-6-9-6zM18 6v12"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+  arrowsv: '<path d="M12 4v16M8 8l4-4 4 4M8 16l4 4 4-4"/>',
+  arrowsh: '<path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4"/>',
+  page: '<path d="M6 3h9l3 3v15H6z"/><path d="M9 12h6M9 16h6M9 8h3"/>',
+  tabs: '<path d="M3 8V6a1 1 0 0 1 1-1h6l2 3h8a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/>',
+  brush: '<path d="M18 3 9 12l3 3 9-9-3-3z"/><path d="M9 12c-3 0-5 2-5 5 0 1-1 3-2 3 2 1 6 1 8-1 1.5-1.5 2-4 2-4"/>',
+};
+const PAIR_ICONS = ["custom", "scroll", "scrollh", "zoom", "volume", "tracks", "undo", "arrowsv", "arrowsh", "page", "tabs", "brush"];
+const FIELDS = [
+  ["clockwise", "Turn clockwise", "Turn right", "e.g. Scroll Down", '<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/>'],
+  ["counter_clockwise", "Turn counter-clockwise", "Turn left", "e.g. Scroll Up", '<path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5"/>'],
+  ["press", "Press", "Tap the knob", "e.g. Middle Click", '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/>'],
+  ["shift_clockwise", "Tap + turn clockwise", "Tap, then turn right", "e.g. Zoom +", '<circle cx="6" cy="12" r="2"/><path d="M21 12a6 6 0 1 1-1.8-4.3M21 6v4h-4"/>'],
+  ["shift_counter_clockwise", "Tap + turn counter-clockwise", "Tap, then turn left", "e.g. Zoom -", '<circle cx="18" cy="12" r="2"/><path d="M3 12a6 6 0 1 0 1.8-4.3M3 6v4h4"/>'],
+];
+const GESTURES = [["double_tap", "Double-tap"], ["triple_tap", "Triple-tap"], ["tray_only", "Tray menu only"]];
+
+const S = { cfg: null, saved: "", sel: 0, page: "layer", pairs: [], functions: [], recording: null, pairOf: [] };
+const L = () => S.cfg.layers[S.sel];
+
+// --- toast + dirty state ---
+let toastTimer;
+function toast(text, error = false) {
+  const t = $("toast");
+  t.textContent = text; t.classList.toggle("error", error); t.classList.add("show");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), error ? 5000 : 2200);
+}
+function changed() {
+  const dirty = JSON.stringify(S.cfg) !== S.saved;
+  $("bar").classList.toggle("dirty", dirty);
+  $("status").textContent = dirty ? "Unsaved changes" : "All changes saved";
+  $("save").disabled = $("revert").disabled = !dirty;
+}
+
+// --- sidebar ---
+function summary(l, i) {
+  const p = S.pairOf[i];
+  if (p && p.index > 0) return S.pairs[p.index].name + (p.reversed ? " (reversed)" : "");
+  return [l.clockwise, l.counter_clockwise].filter(Boolean).join(" / ") || "No turn actions";
+}
+function renderSidebar() {
+  const n = S.cfg.layers.length;
+  $("brand-sub").textContent = `${n} layer${n === 1 ? "" : "s"}`;
+  $("layers").innerHTML = S.cfg.layers.map((l, i) => `
+    <button class="layer ${S.page === "layer" && i === S.sel ? "sel" : ""} ${l.enabled ? "" : "off"}" data-i="${i}">
+      <div class="name">${esc(l.name || "Untitled")}<span class="lnum">${l.enabled ? i + 1 : "off"}</span></div>
+      <div class="sum">${esc(summary(l, i))}</div>
+      ${l.apps.length ? `<div class="apps">${l.apps.slice(0, 4).map(a => `<span class="tag">${esc(a)}</span>`).join("")}${l.apps.length > 4 ? `<span class="tag">+${l.apps.length - 4}</span>` : ""}</div>` : ""}
+    </button>`).join("");
+  $("nav-general").classList.toggle("sel", S.page === "general");
+}
+$("layers").addEventListener("click", e => {
+  const b = e.target.closest(".layer"); if (!b) return;
+  stopRecording(); S.sel = +b.dataset.i; S.page = "layer"; render();
+});
+
+// --- layer page ---
+function renderTiles(index) {
+  $("tiles").innerHTML = S.pairs.map((p, i) => `
+    <button class="tile ${i === index ? "sel" : ""}" data-i="${i}">${svg(ICONS[PAIR_ICONS[i]] || ICONS.custom)}<span>${esc(p.name)}</span></button>`).join("");
+}
+async function refreshPair(i = S.sel) {
+  const l = S.cfg.layers[i];
+  const r = await call("pair", { cw: l.clockwise, ccw: l.counter_clockwise });
+  S.pairOf[i] = r;
+  if (i === S.sel && S.page === "layer") { renderTiles(r.index); if (r.index > 0) $("reverse").checked = r.reversed; }
+  renderSidebar();
+}
+$("tiles").addEventListener("click", e => {
+  const t = e.target.closest(".tile"); if (!t) return;
+  const i = +t.dataset.i, p = S.pairs[i], l = L();
+  if (i === 0) { renderTiles(0); return; }
+  const rev = $("reverse").checked;
+  l.clockwise = rev ? p.ccw : p.cw; l.counter_clockwise = rev ? p.cw : p.ccw;
+  if (!l.press.trim()) l.press = p.press;
+  if (!l.name.trim() || l.name === "New layer" || S.pairs.some(q => q.name === l.name)) l.name = p.name;
+  renderLayer(); changed();
+});
+$("reverse").addEventListener("change", () => {
+  const l = L(); [l.clockwise, l.counter_clockwise] = [l.counter_clockwise, l.clockwise];
+  renderActions(); refreshPair(); changed();
+});
+
+function chipsHtml(steps) {
+  return steps.map(st => {
+    const mods = (st.mods || []).map(m => `<kbd>${esc(m)}</kbd><span class="plus">+</span>`).join("");
+    if (st.t === "keys") return st.keys.map(k => `<kbd>${esc(k)}</kbd>`).join('<span class="plus">+</span>');
+    if (st.t === "func") return `${mods}<span class="fn">${esc(st.name)}</span>`;
+    if (st.t === "open") return `<span class="fn">${svg('<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>')}Open</span><span class="arg">${esc(st.target)}</span>`;
+    return `<span class="fn">${svg('<path d="M5 6h14M12 6v13M9 19h6"/>')}Type</span><span class="arg">“${esc(st.text)}”</span>`;
+  }).join('<span class="then">→</span>');
+}
+
+function renderActions() {
+  $("actions").innerHTML = FIELDS.map(([key, label, hint, ph, icon], i) => `
+    <div class="action" data-i="${i}">
+      <div class="alabel"><div class="glyph">${svg(icon)}</div><div><b>${label}</b><small>${hint}</small></div></div>
+      <div class="field" id="field-${i}">
+        <input id="in-${i}" placeholder="${ph}" spellcheck="false" autocomplete="off" value="${esc(L()[key])}">
+        <div class="chips" id="chips-${i}"></div>
+      </div>
+      <button class="rec" id="rec-${i}">${svg('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h0M11 10h0M15 10h0M7 14h10"/>')}Record</button>
+      <div class="err" id="err-${i}"></div>
+    </div>`).join("");
+  FIELDS.forEach((_, i) => check(i));
+}
+
+const checkTimers = {};
+async function check(i) {
+  const text = $(`in-${i}`).value, field = $(`field-${i}`);
+  const r = await call("check", { text });
+  if ($(`in-${i}`)?.value !== text) return;                       // superseded by newer typing
+  const err = $(`err-${i}`);
+  field.classList.toggle("bad", !r.ok);
+  if (r.ok) {
+    err.innerHTML = "";
+    $(`chips-${i}`).innerHTML = chipsHtml(r.steps);
+    field.classList.toggle("show-chips", r.steps.length > 0 && document.activeElement !== $(`in-${i}`));
+  } else {
+    field.classList.remove("show-chips");
+    const p = r.problem;
+    err.innerHTML = `<span>${esc(p.message)}</span>` + (p.fix ? `<button class="fix" data-i="${i}" data-step="${esc(p.step)}" data-fix="${esc(p.fix)}">Use ‘${esc(p.fix)}’</button>` : "");
+  }
+}
+$("actions").addEventListener("input", e => {
+  const m = e.target.id.match(/^in-(\d)$/); if (!m) return;
+  const i = +m[1]; L()[FIELDS[i][0]] = e.target.value; changed();
+  clearTimeout(checkTimers[i]); checkTimers[i] = setTimeout(() => { check(i); if (i < 2) refreshPair(); }, 120);
+});
+$("actions").addEventListener("focusin", e => {
+  const m = e.target.id.match(/^in-(\d)$/); if (!m) return;
+  $(`field-${m[1]}`).classList.add("focus"); $(`field-${m[1]}`).classList.remove("show-chips");
+});
+$("actions").addEventListener("focusout", e => {
+  const m = e.target.id.match(/^in-(\d)$/); if (!m) return;
+  $(`field-${m[1]}`).classList.remove("focus"); check(+m[1]);
+});
+$("actions").addEventListener("click", e => {
+  const chips = e.target.closest(".chips");
+  if (chips) { $(`in-${chips.id.split("-")[1]}`).focus(); return; }
+  const fix = e.target.closest(".fix");
+  if (fix) {
+    const i = +fix.dataset.i, input = $(`in-${i}`);
+    input.value = input.value.replace(fix.dataset.step, fix.dataset.fix);
+    L()[FIELDS[i][0]] = input.value; changed(); check(i); if (i < 2) refreshPair();
+    return;
+  }
+  const rec = e.target.closest(".rec");
+  if (rec) { const i = +rec.id.split("-")[1]; S.recording === i ? stopRecording() : startRecording(i); }
+});
+
+async function startRecording(i) {
+  stopRecording();
+  const r = await call("record", { field: i });
+  if (!r.ok) { toast("Couldn't start recording", true); return; }
+  S.recording = i;
+  const input = $(`in-${i}`);
+  input.dataset.prev = input.value; input.value = ""; input.placeholder = "Press a shortcut…  (Esc to cancel)";
+  $(`field-${i}`).classList.add("recording"); $(`field-${i}`).classList.remove("show-chips", "bad");
+  $(`rec-${i}`).classList.add("on");
+}
+function stopRecording(restore = true) {
+  if (S.recording === null) return;
+  const i = S.recording; S.recording = null;
+  call("stop_record");
+  const input = $(`in-${i}`);
+  if (input) {
+    if (restore && input.dataset.prev !== undefined) input.value = input.dataset.prev;
+    input.placeholder = FIELDS[i][3];
+    $(`field-${i}`).classList.remove("recording"); $(`rec-${i}`).classList.remove("on");
+    check(i);
+  }
+}
+handlers.recorded = ({ field, text }) => {
+  if (S.recording !== field) return;
+  const input = $(`in-${field}`); input.dataset.prev = text; stopRecording();
+  input.value = text; L()[FIELDS[field][0]] = text; changed(); check(field); if (field < 2) refreshPair();
+};
+handlers.record_cancel = ({ field, reason }) => { if (S.recording === field) stopRecording(); if (reason) toast(reason, true); };
+
+function renderFeel() {
+  const l = L();
+  $("speed").value = Math.min(5, Math.max(0.25, l.speed));
+  $("speed-val").textContent = `${+l.speed.toFixed(2)}×`;
+  $("accel").checked = l.accelerate;
+  $("maxps").value = l.max_per_sec;
+}
+$("speed").addEventListener("input", e => { L().speed = +e.target.value; renderFeel(); changed(); });
+$("accel").addEventListener("change", e => { L().accelerate = e.target.checked; changed(); });
+$("maxps").addEventListener("input", e => { L().max_per_sec = Math.max(0, parseInt(e.target.value || "0", 10) || 0); changed(); });
+
+function renderApps() {
+  const apps = L().apps;
+  $("app-chips").innerHTML = apps.length
+    ? apps.map((a, i) => `<span class="appchip">${esc(a)}<button data-i="${i}" title="Remove">${svg('<path d="M6 6l12 12M18 6 6 18"/>')}</button></span>`).join("")
+    : `<span class="empty">No apps. This layer is only used when you pick it.</span>`;
+}
+function addApp() {
+  const v = $("app-input").value.trim().toLowerCase().replace(/\.exe$/, "");
+  if (!v) return;
+  const owner = S.cfg.layers.findIndex((l, i) => i !== S.sel && l.apps.includes(v));
+  if (owner >= 0) { toast(`‘${v}’ already switches to ‘${S.cfg.layers[owner].name}’`, true); return; }
+  if (!L().apps.includes(v)) L().apps.push(v);
+  $("app-input").value = ""; renderApps(); renderSidebar(); changed();
+}
+$("app-add").addEventListener("click", addApp);
+$("app-input").addEventListener("keydown", e => { if (e.key === "Enter") addApp(); });
+$("app-chips").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  L().apps.splice(+b.dataset.i, 1); renderApps(); renderSidebar(); changed();
+});
+
+function renderLayer() {
+  const l = L();
+  $("layer-name").value = l.name;
+  $("layer-enabled").checked = l.enabled;
+  $("move-up").disabled = S.sel === 0;
+  $("move-down").disabled = S.sel === S.cfg.layers.length - 1;
+  $("delete").disabled = S.cfg.layers.length === 1;
+  renderTiles(S.pairOf[S.sel]?.index ?? 0);
+  renderActions(); renderFeel(); renderApps(); refreshPair();
+}
+$("layer-name").addEventListener("input", e => { L().name = e.target.value; renderSidebar(); changed(); });
+$("layer-enabled").addEventListener("change", e => { L().enabled = e.target.checked; renderSidebar(); changed(); });
+function moveLayer(d) {
+  const ls = S.cfg.layers, j = S.sel + d; if (j < 0 || j >= ls.length) return;
+  [ls[S.sel], ls[j]] = [ls[j], ls[S.sel]]; [S.pairOf[S.sel], S.pairOf[j]] = [S.pairOf[j], S.pairOf[S.sel]];
+  S.sel = j; render(); changed();
+}
+$("move-up").addEventListener("click", () => moveLayer(-1));
+$("move-down").addEventListener("click", () => moveLayer(1));
+$("delete").addEventListener("click", () => {
+  if (S.cfg.layers.length === 1 || !confirm(`Delete the layer ‘${L().name}’?`)) return;
+  S.cfg.layers.splice(S.sel, 1); S.pairOf.splice(S.sel, 1); S.sel = Math.min(S.sel, S.cfg.layers.length - 1); render(); changed();
+});
+$("add-layer").addEventListener("click", () => {
+  S.cfg.layers.push({ name: "New layer", enabled: true, clockwise: "", counter_clockwise: "", press: "", shift_clockwise: "",
+                      shift_counter_clockwise: "", speed: 1, accelerate: false, max_per_sec: 0, apps: [] });
+  stopRecording(); S.sel = S.cfg.layers.length - 1; S.page = "layer"; render(); changed();
+  $("layer-name").focus(); $("layer-name").select();
+});
+
+// --- general page ---
+function renderGeneral() {
+  $("gesture").innerHTML = GESTURES.map(([v, t]) => `<button data-v="${v}" class="${S.cfg.gesture === v ? "sel" : ""}">${t}</button>`).join("");
+  $("window").value = S.cfg.double_tap_ms;
+  $("window-val").textContent = `${S.cfg.double_tap_ms} ms`;
+  $("ref").innerHTML = S.functions.map(f => `<span class="fn">${esc(f)}</span>`).join("");
+}
+$("gesture").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; S.cfg.gesture = b.dataset.v; renderGeneral(); changed(); });
+$("window").addEventListener("input", e => { S.cfg.double_tap_ms = +e.target.value; renderGeneral(); changed(); });
+$("nav-general").addEventListener("click", () => { stopRecording(); S.page = "general"; render(); });
+$("import").addEventListener("click", async () => {
+  const r = await call("import");
+  if (r.config) { S.cfg = r.config; S.sel = 0; S.pairOf = []; render(); changed(); toast("Imported. Press Save to keep it."); }
+  else if (r.error) toast(r.error, true);
+});
+$("export").addEventListener("click", async () => {
+  const r = await call("export", { config: S.cfg });
+  if (r.ok) toast("Exported"); else if (r.error) toast(r.error, true);
+});
+
+// --- save / revert ---
+async function save() {
+  if ($("save").disabled) return;
+  const r = await call("save", { config: S.cfg });
+  if (r.ok) { S.saved = JSON.stringify(S.cfg); changed(); toast("✓  Saved"); }
+  else toast(r.error || "Couldn't save", true);
+}
+$("save").addEventListener("click", save);
+$("revert").addEventListener("click", () => { stopRecording(); S.cfg = JSON.parse(S.saved); S.sel = Math.min(S.sel, S.cfg.layers.length - 1); S.pairOf = []; render(); changed(); });
+document.addEventListener("keydown", e => { if (e.ctrlKey && e.key.toLowerCase() === "s") { e.preventDefault(); save(); } });
+
+function render() {
+  $("page-layer").hidden = S.page !== "layer";
+  $("page-general").hidden = S.page !== "general";
+  if (S.page === "layer") renderLayer(); else renderGeneral();
+  renderSidebar();
+}
+
+(async () => {
+  const d = await call("init");
+  document.documentElement.classList.toggle("dark", d.dark);
+  document.documentElement.style.setProperty("--accent", d.accent);
+  S.cfg = d.config; S.saved = JSON.stringify(d.config); S.sel = Math.min(d.current, d.config.layers.length - 1);
+  S.pairs = d.pairs; S.functions = d.functions;
+  $("running").innerHTML = d.apps.map(a => `<option value="${esc(a)}">`).join("");
+  render(); changed();
+  S.cfg.layers.forEach((_, i) => { if (i !== S.sel) refreshPair(i); });
+})();
+</script>
+</body>
+</html>

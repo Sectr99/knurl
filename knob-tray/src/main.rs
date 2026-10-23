@@ -9,9 +9,9 @@ mod config;
 mod knob;
 mod names;
 mod popup;
-mod settings;
 mod system;
 mod theme;
+mod webui;
 
 use config::{Config, Layer, Parsed};
 use native_windows_gui as nwg;
@@ -36,6 +36,9 @@ const RELOAD_POLL_MS: u32 = 2_000;
 const LOW_BATTERY: u8 = 15;
 const WM_FOREGROUND: u32 = WM_APP + 1;
 const WM_RECORDED: u32 = WM_APP + 2;
+const WM_WEB: u32 = WM_APP + 3;     // the settings page sent a message
+const WM_SETTINGS_CLOSED: u32 = WM_APP + 4;
+const WM_OPEN_SETTINGS: u32 = WM_APP + 5;    // sent by a second launch
 const ICON_ON: &[u8] = include_bytes!("../assets/knob_on.ico");
 const ICON_OFF: &[u8] = include_bytes!("../assets/knob_off.ico");
 
@@ -53,8 +56,6 @@ struct State {
     battery: Option<system::Battery>,
     battery_warned: bool,
     factory_warned: bool,
-    draft: Vec<Layer>,                // settings window working copy
-    draft_sel: Option<usize>,
     recording: Option<usize>,         // action box waiting for a recorded key
 }
 
@@ -69,10 +70,10 @@ struct Ui {
     m_setup: nwg::MenuItem, m_install: nwg::MenuItem, m_startup: nwg::MenuItem,
     m_sep2: nwg::MenuSeparator,
     m_quit: nwg::MenuItem,
-    s: settings::SettingsUi,
+    web: webui::Host,
 }
 
-struct App { ui: Ui, popup: popup::Popup, state: RefCell<State>, start: Instant }
+struct App { ui: Ui, popup: popup::Popup, web: webui::Web, state: RefCell<State>, start: Instant }
 
 impl App {
     fn hwnd(h: &nwg::ControlHandle) -> HWND { h.hwnd().unwrap() as HWND }
@@ -316,7 +317,7 @@ fn build_ui(ui: &mut Ui) -> Result<(), nwg::NwgError> {
     item(&mut ui.m_startup, "Start with Windows")?;
     nwg::MenuSeparator::builder().parent(&ui.menu).build(&mut ui.m_sep2)?;
     item(&mut ui.m_quit, "Quit")?;
-    settings::build(&mut ui.s, &ui.icon_win)
+    webui::build(&mut ui.web, &ui.icon_win)
 }
 
 fn main() {
@@ -328,7 +329,12 @@ fn main() {
     }));
     unsafe {
         INSTANCE_MUTEX.store(CreateMutexW(std::ptr::null(), 0, system::wide("RotaryKnobTraySingleInstance").as_ptr()), Ordering::Relaxed);
-        if GetLastError() == ERROR_ALREADY_EXISTS { return; }
+        if GetLastError() == ERROR_ALREADY_EXISTS {
+            // already running: launching it again (e.g. from the Start menu) opens that copy's settings
+            let host = FindWindowW(std::ptr::null(), system::wide("Rotary knob \u{2014} settings").as_ptr());
+            if host != 0 { PostMessageW(host, WM_OPEN_SETTINGS, 0, 0); }
+            return;
+        }
     }
     nwg::init().expect("init GUI");
     theme::allow_dark_menus();
@@ -345,10 +351,11 @@ fn main() {
     let app = Rc::new(App {
         ui,
         popup: popup::Popup::new(),
+        web: Default::default(),
         state: RefCell::new(State {
             config, parsed, knob: Default::default(), pace: Default::default(), manual_layer: 0, enabled: false,
             config_mtime: if load_error.is_some() { None } else { config::modified() },
-            battery: None, battery_warned: false, factory_warned: false, draft: vec![], draft_sel: None, recording: None,
+            battery: None, battery_warned: false, factory_warned: false, recording: None,
         }),
         start: Instant::now(),
     });
@@ -364,6 +371,8 @@ fn main() {
         WM_TIMER if wp == TIMER_RELOAD => { a.check_reload(); Some(0) }
         WM_FOREGROUND => { unsafe { SetTimer(a.msg_hwnd(), TIMER_FOCUS, FOCUS_SETTLE_MS, None) }; Some(0) }
         WM_RECORDED => { a.on_recorded(wp as u8, lp as u32); Some(0) }
+        WM_WEB => { a.on_web_message(); Some(0) }
+        WM_SETTINGS_CLOSED => { a.close_settings(); Some(0) }
         WM_INPUT => { a.on_raw_input(lp); None }                    // None: default processing frees the input
         _ => None,
     }).expect("raw handler");
@@ -399,9 +408,12 @@ fn main() {
     });
 
     let a = app.clone();
-    let _win = nwg::full_bind_event_handler(&app.ui.s.win.handle, move |evt, _, h| a.on_settings_event(evt, h));
-    let _theme = nwg::bind_raw_event_handler(&app.ui.s.win.handle, 0x10001, |hwnd, msg, wp, _| theme::handle(hwnd as HWND, msg, wp))
-        .expect("theme handler");
+    // Closing the settings window: free the web view from the app's own loop, not inside the window's close handling.
+    let _win = nwg::bind_raw_event_handler(&app.ui.web.win.handle, 0x10001, move |_, msg, _, _| match msg {
+        WM_CLOSE => { unsafe { PostMessageW(a.msg_hwnd(), WM_SETTINGS_CLOSED, 0, 0) }; Some(0) }
+        WM_OPEN_SETTINGS => { a.open_settings(); Some(0) }
+        _ => None,
+    }).expect("settings window handler");
 
     app.check_battery();
     app.set_enabled(true, true);

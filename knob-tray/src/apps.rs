@@ -15,6 +15,7 @@ pub fn normalize(name: &str) -> String {
 }
 
 /// "chrome, photoshop.exe" -> ["chrome", "photoshop"]
+#[cfg(test)]
 pub fn parse_list(s: &str) -> Vec<String> {
     s.split(',').map(normalize).filter(|a| !a.is_empty()).collect()
 }
