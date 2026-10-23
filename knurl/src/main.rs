@@ -296,11 +296,24 @@ impl App {
     }
 }
 
+/// The icon for `size` px from a multi-size .ico: the smallest frame at least that big, so the hand-tuned
+/// small frames get used (nwg would take the first frame and rescale it). Lives as long as the app.
+fn ico_frame(ico: &[u8], size: u32) -> *mut std::ffi::c_void {
+    let entry = |i: usize| {
+        let e = &ico[6 + 16 * i..];
+        let w = if e[0] == 0 { 256 } else { e[0] as u32 };
+        (w, u32::from_le_bytes(e[8..12].try_into().unwrap()) as usize, u32::from_le_bytes(e[12..16].try_into().unwrap()) as usize)
+    };
+    let count = u16::from_le_bytes([ico[4], ico[5]]) as usize;
+    let (_, len, at) = (0..count).map(entry).filter(|e| e.0 >= size).min_by_key(|e| e.0).unwrap_or_else(|| entry(count - 1));
+    unsafe { CreateIconFromResourceEx(ico[at..].as_ptr(), len as u32, 1, 0x0003_0000, size as i32, size as i32, LR_DEFAULTCOLOR) as _ }
+}
+
 fn build_ui(ui: &mut Ui) -> Result<(), nwg::NwgError> {
     let small = unsafe { GetSystemMetrics(SM_CXSMICON) } as u32;
-    nwg::Icon::builder().source_bin(Some(ICON_ON)).size(Some((small, small))).build(&mut ui.icon_on)?;
-    nwg::Icon::builder().source_bin(Some(ICON_OFF)).size(Some((small, small))).build(&mut ui.icon_off)?;
-    nwg::Icon::builder().source_bin(Some(ICON_ON)).size(Some((32, 32))).build(&mut ui.icon_win)?;
+    ui.icon_on.handle = ico_frame(ICON_ON, small) as _;
+    ui.icon_off.handle = ico_frame(ICON_OFF, small) as _;
+    ui.icon_win.handle = ico_frame(ICON_ON, 32) as _;
     let mut global = nwg::Font::default();
     nwg::Font::builder().family("Segoe UI").size(16).build(&mut global)?;
     nwg::Font::set_global_default(Some(global));

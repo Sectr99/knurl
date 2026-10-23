@@ -20,3 +20,7 @@ remap.py
 # Logs and captured output
 *.log
 *.out
+
+# Icon generator output that is not shipped (knurl/assets/make_icon.js writes these)
+knurl/assets/frames/
+knurl/assets/preview.png
