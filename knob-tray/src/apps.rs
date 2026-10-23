@@ -44,10 +44,15 @@ pub fn duplicate(apps: &[Vec<String>]) -> Option<(String, usize, usize)> {
 }
 
 fn exe_of_window(hwnd: HWND) -> Option<String> {
+    let mut pid = 0;
+    unsafe { GetWindowThreadProcessId(hwnd, &mut pid) };
+    if pid == 0 || pid == unsafe { GetCurrentProcessId() } { return None; }
+    exe_of_pid(pid)
+}
+
+/// "discord" for a process id (lowercase, no ".exe").
+pub fn exe_of_pid(pid: u32) -> Option<String> {
     unsafe {
-        let mut pid = 0;
-        GetWindowThreadProcessId(hwnd, &mut pid);
-        if pid == 0 || pid == GetCurrentProcessId() { return None; }
         let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
         if h == 0 { return None; }               // e.g. elevated apps when we aren't
         let mut buf = [0u16; 512];

@@ -5,6 +5,7 @@
 
 mod action;
 mod apps;
+mod audio;
 mod config;
 mod knob;
 mod names;
@@ -163,7 +164,7 @@ impl App {
             }
         };
         match act {
-            Some(a) => action::perform(&a, mult),
+            Some(a) => if let Some((title, sub)) = action::perform(&a, mult) { self.popup.show(&title, &sub, 0, 0) },
             None => self.switch_to_next_layer(),
         }
     }
@@ -336,6 +337,7 @@ fn main() {
             return;
         }
     }
+    audio::init();
     nwg::init().expect("init GUI");
     theme::allow_dark_menus();
 

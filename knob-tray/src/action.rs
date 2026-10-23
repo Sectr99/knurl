@@ -18,6 +18,8 @@ pub enum Kind {
     Click { down: u32, up: u32 },
     Run(String),
     Type(String),
+    AppVolume { app: String, percent: i32 },   // a program's own volume in the Windows mixer
+    AppMute(String),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -62,6 +64,14 @@ pub fn key_name(vk: u8) -> Option<String> {
 
 fn parse_step(text: &str) -> Result<Step, String> {
     let lower = text.trim().to_ascii_lowercase();
+    if let Some(rest) = lower.strip_prefix("appvol:") {        // appvol:discord:+5
+        let (app, pct) = rest.rsplit_once(':').ok_or("appvol needs app:percent")?;
+        let percent = pct.parse().map_err(|_| format!("'{pct}' is not a number"))?;
+        return Ok(Step { mods: vec![], kind: Kind::AppVolume { app: app.trim().into(), percent } });
+    }
+    if let Some(app) = lower.strip_prefix("appmute:") {
+        return Ok(Step { mods: vec![], kind: Kind::AppMute(app.trim().into()) });
+    }
     if let Some(target) = lower.strip_prefix("run:") {
         let original = text.trim()[4..].trim();          // keep the path's own case
         if target.trim().is_empty() { return Err("run: needs a program, file or URL".into()); }
@@ -126,13 +136,32 @@ fn run(target: &str) {
     unsafe { ShellExecuteW(0, w("open").as_ptr(), w(target).as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL) };
 }
 
-/// `mult` scales scrolling and repeats keys/clicks (speed and acceleration); run/type happen once.
-pub fn perform(a: &Action, mult: f32) {
+fn title_case(app: &str) -> String {
+    let mut c = app.chars();
+    c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
+}
+
+/// A program's mixer volume or mute, with popup text describing the result.
+fn app_audio(app: &str, delta: f32, mute: bool) -> (String, String) {
+    let sub = match crate::audio::change(app, delta, mute) {
+        Some((v, true)) => format!("Muted \u{00B7} volume {v}%"),
+        Some((v, false)) => format!("Volume {v}%"),
+        None => "No audio from it yet".into(),
+    };
+    (title_case(app), sub)
+}
+
+/// `mult` scales scrolling, mixer steps and repeats keys/clicks (speed and acceleration); run/type happen once.
+/// Returns popup text (title, subtitle) when the action has something to show, e.g. a new mixer volume.
+pub fn perform(a: &Action, mult: f32) -> Option<(String, String)> {
     let repeats = (mult.round() as usize).max(1);
+    let mut feedback = None;
     for s in &a.0 {
         match &s.kind {
             Kind::Run(t) => { run(t); continue; }
             Kind::Type(t) => { type_text(t); continue; }
+            Kind::AppVolume { app, percent } => { feedback = Some(app_audio(app, *percent as f32 / 100.0 * mult, false)); continue; }
+            Kind::AppMute(app) => { feedback = Some(app_audio(app, 0.0, true)); continue; }
             _ => {}
         }
         for &m in &s.mods { key(m, false); }
@@ -141,10 +170,11 @@ pub fn perform(a: &Action, mult: f32) {
             Kind::Wheel { delta, horizontal } =>
                 unsafe { mouse_event(if horizontal { 0x1000 } else { 0x0800 }, 0, 0, (delta as f32 * mult).round() as i32, 0) },
             Kind::Click { down, up } => for _ in 0..repeats { unsafe { mouse_event(down, 0, 0, 0, 0); mouse_event(up, 0, 0, 0, 0) } },
-            Kind::Run(_) | Kind::Type(_) => {}
+            Kind::Run(_) | Kind::Type(_) | Kind::AppVolume { .. } | Kind::AppMute(_) => {}
         }
         for &m in s.mods.iter().rev() { key(m, true); }
     }
+    feedback
 }
 
 #[cfg(test)]

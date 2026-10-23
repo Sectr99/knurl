@@ -52,8 +52,8 @@ pub fn templates() -> Vec<(&'static str, Layer)> {
         shift_clockwise: scw.into(), shift_counter_clockwise: sccw.into(), apps: vec![app.into()], ..Default::default()
     };
     vec![
-        ("Turn: channels \u{00B7} Tap + turn: servers \u{00B7} Press: mute. Active when Discord is focused.",
-         l("Discord", "Alt + Down Arrow", "Alt + Up Arrow", "Ctrl + Shift + M", "Ctrl + Alt + Down Arrow", "Ctrl + Alt + Up Arrow", "discord")),
+        ("Turn: Discord's volume in the Windows mixer \u{00B7} Press: mute Discord. Active when Discord is focused.",
+         l("Discord", "Discord Volume +", "Discord Volume -", "Discord Mute", "", "", "discord")),
         ("Turn: YouTube volume \u{00B7} Tap + turn: skip 10 s \u{00B7} Press: play / pause. Active on YouTube tabs in any browser.",
          l("YouTube", "Up Arrow", "Down Arrow", "K", "L", "J", "title:youtube")),
     ]

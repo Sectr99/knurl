@@ -85,6 +85,15 @@ fn keys(c: &str) -> Option<String> {
     action::parse(&syntax).ok().map(|_| syntax)
 }
 
+/// "Discord Volume +" -> ("discord", Some(5)); "Discord Mute" -> ("discord", None). The program's mixer volume.
+fn app_audio(step: &str) -> Option<(String, Option<i32>)> {
+    let s = step.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+    let (app, what) = [(" volume +", Some(5)), (" volume+", Some(5)), (" volume -", Some(-5)), (" volume-", Some(-5)), (" mute", None)]
+        .into_iter().find_map(|(suffix, d)| s.strip_suffix(suffix).map(|app| (app.trim().to_string(), d)))?;
+    if app.is_empty() || app.contains('+') || is_modifier(&app).is_some() { return None; }
+    Some((app, what))
+}
+
 fn open_or_type(step: &str) -> Option<String> {
     let lower = step.to_lowercase();
     if let Some(text) = lower.strip_prefix("type ").map(|_| &step[5..]) { return Some(format!("type:{text}")); }
@@ -130,6 +139,7 @@ fn step_syntax(step: &str) -> Result<String, String> {
     if step.is_empty() { return Ok(String::new()); }
     let c = compact(step);
     open_or_type(step)
+        .or_else(|| app_audio(step).map(|(app, d)| match d { Some(p) => format!("appvol:{app}:{p:+}"), None => format!("appmute:{app}") }))
         .or_else(|| function(&c))
         .or_else(|| keys(&c))
         .or_else(|| action::parse(step).ok().map(|_| step.to_string()))   // older syntax
@@ -208,6 +218,12 @@ fn step_view(step: &str) -> Option<StepView> {
     let lower = step.to_lowercase();
     if lower.starts_with("type ") || lower.starts_with("type:") { return Some(StepView::Type { text: step[5..].to_string() }); }
     if lower.starts_with("open ") && !step[5..].trim().is_empty() { return Some(StepView::Open { target: step[5..].trim().to_string() }); }
+    if let Some((app, d)) = app_audio(step) {
+        let mut c = app.chars();
+        let app = c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default();
+        let what = match d { Some(p) if p > 0 => "Volume +", Some(_) => "Volume -", None => "Mute" };
+        return Some(StepView::Func { mods: vec![], name: format!("{app} {what}") });
+    }
     let c = compact(step);
     if let Some((mods, i)) = function_parts(&c) {
         return Some(StepView::Func { mods: mods.iter().map(|m| mod_label(m)).collect(), name: FUNCTIONS[i].0.to_string() });
@@ -252,6 +268,8 @@ mod tests {
             ("Ctrl + +", "ctrl+plus"), ("[", "["), ("Win + D", "win+d"),
             ("Open notepad", "run:notepad"), ("open youtube.com", "run:https://youtube.com"), ("Type Hello, World", "type:Hello, World"),
             ("wheel:-120", "wheel:-120"), ("ctrl+z", "ctrl+z"), ("next", "next"), ("", ""),
+            ("Discord Volume +", "appvol:discord:+5"), ("zen volume-", "appvol:zen:-5"), ("Discord Mute", "appmute:discord"),
+            ("Ctrl + Volume +", "ctrl+volup"), ("Volume -", "voldown"), ("Mute", "mute"),
         ] {
             assert_eq!(to_syntax(input).as_deref(), Ok(want), "{input}");
         }
@@ -285,6 +303,8 @@ mod tests {
         assert_eq!(v("Ctrl + +"), vec![StepView::Keys { keys: vec!["Ctrl".into(), "Plus".into()] }]);
         assert_eq!(v("Copy, Open notepad, Type hi, there").len(), 3);
         assert_eq!(v("Page Up"), vec![StepView::Keys { keys: vec!["Page Up".into()] }]);
+        assert_eq!(v("discord volume +"), vec![StepView::Func { mods: vec![], name: "Discord Volume +".into() }]);
+        assert_eq!(v("Discord Mute"), vec![StepView::Func { mods: vec![], name: "Discord Mute".into() }]);
         let p = check("Copy, Zom +").unwrap_err();
         assert_eq!((p.step.as_str(), p.fix.as_deref()), ("Zom +", Some("Zoom +")));
         assert!(check("make a sandwich").unwrap_err().fix.is_none());
