@@ -55,7 +55,7 @@
   .side-btn.sel { background: var(--panel-hover); box-shadow: var(--shadow); }
   .side-btn.add { color: var(--accent); font-weight: 600; }
   .side { position: relative; }
-  .menu { position: absolute; left: 12px; right: 12px; z-index: 5; background: var(--panel-hover); border: 1px solid var(--border); border-radius: 10px;
+  .menu { position: absolute; left: 12px; right: 12px; z-index: 5; overflow-y: auto; background: var(--panel-hover); border: 1px solid var(--border); border-radius: 10px;
           box-shadow: 0 10px 30px rgba(0,0,0,.28); padding: 6px; display: flex; flex-direction: column; gap: 2px; animation: fade .12s ease-out; }
   .menu[hidden] { display: none; }
   .menu button { display: flex; gap: 10px; align-items: flex-start; text-align: left; border: 0; background: transparent; border-radius: 7px; padding: 8px 10px; }
@@ -540,8 +540,18 @@ $("delete").addEventListener("click", () => {
   S.cfg.layers.splice(S.sel, 1); S.pairOf.splice(S.sel, 1); S.sel = Math.min(S.sel, S.cfg.layers.length - 1); render(); changed();
 });
 // "New layer": blank, or a ready-made template (apps already used by another layer are left off)
-const TEMPLATE_ICONS = { Discord: '<path d="M7 17c-2-1-3-3-3-7l2-4c2-1 4-1 4-1l.5 1h3l.5-1s2 0 4 1l2 4c0 4-1 6-3 7l-1-2"/><circle cx="9.5" cy="12" r="1"/><circle cx="14.5" cy="12" r="1"/>',
-                         YouTube: '<rect x="3" y="6" width="18" height="12" rx="4"/><path d="m10.5 9.5 4 2.5-4 2.5z"/>' };
+const TEMPLATE_ICONS = {
+  Discord: '<path d="M7 17c-2-1-3-3-3-7l2-4c2-1 4-1 4-1l.5 1h3l.5-1s2 0 4 1l2 4c0 4-1 6-3 7l-1-2"/><circle cx="9.5" cy="12" r="1"/><circle cx="14.5" cy="12" r="1"/>',
+  YouTube: '<rect x="3" y="6" width="18" height="12" rx="4"/><path d="m10.5 9.5 4 2.5-4 2.5z"/>',
+  Spotify: '<circle cx="12" cy="12" r="9"/><path d="M7.5 9.5c3-1 6.5-.7 9 .8M8 12.6c2.5-.7 5.2-.4 7.2.8M8.6 15.5c2-.5 3.9-.3 5.5.6"/>',
+  "Video editing": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4"/>',
+  "VS Code": '<path d="m9 8-5 4 5 4M15 8l5 4-5 4"/>',
+  "Teams call": '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>',
+  "Zoom call": '<rect x="3" y="7" width="12" height="10" rx="2"/><path d="m15 11 6-3v8l-6-3"/>',
+  Photoshop: ICONS.brush,
+  Figma: '<path d="M12 3H9a3 3 0 0 0 0 6h3zM12 9H9a3 3 0 0 0 0 6h3zM12 3h3a3 3 0 0 1 0 6h-3zM12 15H9a3 3 0 1 0 3 3zM15 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/>',
+  Excel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14h18M9 4v16"/>',
+};
 function renderAddMenu() {
   const blank = `<button data-t="-1">${svg('<path d="M12 5v14M5 12h14"/>')}<div><b>Blank layer</b><small>Start from scratch</small></div></button>`;
   $("add-menu").innerHTML = blank + S.templates.map((t, i) =>
@@ -551,6 +561,7 @@ $("add-layer").addEventListener("click", e => {
   e.stopPropagation();
   const m = $("add-menu"), b = $("add-layer");
   m.style.top = `${b.offsetTop + b.offsetHeight + 4}px`;
+  m.style.maxHeight = `${window.innerHeight - (b.getBoundingClientRect().bottom + 4) - 12}px`;   // scroll rather than run off the window
   m.hidden = !m.hidden;
 });
 document.addEventListener("click", e => { if (!e.target.closest("#add-menu")) $("add-menu").hidden = true; });

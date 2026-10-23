@@ -47,15 +47,33 @@ impl Default for Layer {
 
 /// Ready-made layers offered by "New layer": what it does, and the layer.
 pub fn templates() -> Vec<(&'static str, Layer)> {
-    let l = |name: &str, cw: &str, ccw: &str, press: &str, scw: &str, sccw: &str, app: &str| Layer {
+    let l = |name: &str, cw: &str, ccw: &str, press: &str, scw: &str, sccw: &str, apps: &[&str]| Layer {
         name: name.into(), clockwise: cw.into(), counter_clockwise: ccw.into(), press: press.into(),
-        shift_clockwise: scw.into(), shift_counter_clockwise: sccw.into(), apps: vec![app.into()], ..Default::default()
+        shift_clockwise: scw.into(), shift_counter_clockwise: sccw.into(), apps: apps.iter().map(|a| a.to_string()).collect(),
+        ..Default::default()
     };
+    // ponytail: program names are the common ones; some vary by version (new Teams is "ms-teams", classic was "teams")
     vec![
-        ("Turn: Discord's volume in the Windows mixer \u{00B7} Press: mute Discord. Active when Discord is focused.",
-         l("Discord", "Discord Volume +", "Discord Volume -", "Discord Mute", "", "", "discord")),
-        ("Turn: YouTube volume \u{00B7} Tap + turn: skip 10 s \u{00B7} Press: play / pause. Active on YouTube tabs in any browser.",
-         l("YouTube", "Up Arrow", "Down Arrow", "K", "L", "J", "title:youtube")),
+        ("Turn: Discord's volume in the Windows mixer \u{00B7} Press: mute Discord.",
+         l("Discord", "Discord Volume +", "Discord Volume -", "Discord Mute", "", "", &["discord"])),
+        ("Turn: YouTube volume \u{00B7} Tap + turn: skip 10 s \u{00B7} Press: play / pause. On YouTube tabs in any browser.",
+         l("YouTube", "Up Arrow", "Down Arrow", "K", "L", "J", &["title:youtube"])),
+        ("Turn: Spotify's volume (mixer) \u{00B7} Tap + turn: next / previous track \u{00B7} Press: play / pause.",
+         l("Spotify", "Spotify Volume +", "Spotify Volume -", "Play/Pause", "Ctrl + Right Arrow", "Ctrl + Left Arrow", &["spotify"])),
+        ("Premiere Pro and DaVinci Resolve. Turn: step a frame \u{00B7} Tap + turn: shuttle faster \u{00B7} Press: play / stop.",
+         l("Video editing", "Right Arrow", "Left Arrow", "Space", "L", "J", &["adobe premiere pro", "resolve"])),
+        ("Turn: scroll by line \u{00B7} Tap + turn: next / previous file tab \u{00B7} Press: command palette.",
+         l("VS Code", "Ctrl + Down Arrow", "Ctrl + Up Arrow", "Ctrl + Shift + P", "Ctrl + Page Down", "Ctrl + Page Up", &["code"])),
+        ("Turn: Teams' volume (mixer) \u{00B7} Press: toggle your mic.",
+         l("Teams call", "ms-teams Volume +", "ms-teams Volume -", "Ctrl + Shift + M", "", "", &["ms-teams"])),
+        ("Turn: Zoom's volume (mixer) \u{00B7} Press: toggle your mic.",
+         l("Zoom call", "Zoom Volume +", "Zoom Volume -", "Alt + A", "", "", &["zoom"])),
+        ("Turn: brush size \u{00B7} Tap + turn: zoom \u{00B7} Press: step back in history.",
+         l("Photoshop", "]", "[", "Ctrl + Z", "Ctrl + +", "Ctrl + -", &["photoshop"])),
+        ("Turn: zoom \u{00B7} Tap + turn: scroll sideways \u{00B7} Press: zoom to fit.",
+         l("Figma", "Zoom +", "Zoom -", "Shift + 1", "Scroll Right", "Scroll Left", &["figma"])),
+        ("Turn: scroll sideways a screen \u{00B7} Tap + turn: next / previous sheet.",
+         l("Excel", "Alt + Page Down", "Alt + Page Up", "", "Ctrl + Page Down", "Ctrl + Page Up", &["excel"])),
     ]
 }
 
@@ -156,7 +174,11 @@ mod tests {
     #[test]
     fn templates_are_valid() {
         let layers: Vec<Layer> = templates().into_iter().map(|t| t.1).collect();
-        assert!(validate(&Config { layers, ..Config::default() }).is_ok());
+        assert_eq!(layers.len(), 10);
+        assert_eq!(validate(&Config { layers, ..Config::default() }).err(), None);
+        // "Zoom Volume +" is the Zoom app's mixer volume, not the "Zoom +" function
+        assert_eq!(crate::names::to_syntax("Zoom Volume +").unwrap(), "appvol:zoom:+5");
+        assert_eq!(crate::names::to_syntax("Zoom +").unwrap(), "ctrl+wheel:120");
     }
 
     #[test]
