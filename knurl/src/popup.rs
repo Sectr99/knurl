@@ -1,25 +1,27 @@
-//! Dark rounded overlay that slides down from the top centre of the monitor under the cursor, holds, and
-//! slides back up (macOS-style). Big title, small subtitle, one dot per layer. GDI-drawn, never takes focus.
+//! Dark rounded overlay that slides down from the top centre of the monitor under the cursor (fading in), holds,
+//! and slides back up (macOS-style). Title, subtitle, one pip per layer. Drawn with Direct2D into a per-pixel-alpha
+//! layered window, so the card, its shadow, text and pips are all anti-aliased. Never takes focus; clicks pass through.
 use std::{cell::RefCell, time::{Duration, Instant}};
+use windows::{core::{w, PCWSTR}, Win32::Graphics::{Direct2D::{Common::*, *}, DirectWrite::*, Dxgi::Common::*, Gdi::HDC as D2dHdc}};
 use windows_sys::Win32::{
-    Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
-    Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND},
+    Foundation::{HWND, LPARAM, LRESULT, POINT, SIZE, WPARAM},
     Graphics::Gdi::*,
     System::LibraryLoader::GetModuleHandleW,
     UI::HiDpi::GetDpiForSystem,
     UI::WindowsAndMessaging::*,
 };
 
-const BG: u32 = 0x00202020; // COLORREF is 0x00BBGGRR
-const TITLE: u32 = 0x00FFFFFF;
-const SUB: u32 = 0x00A0A0A0;
-const DOT_ON: u32 = 0x00FFC24C; // light accent blue
-const DOT_OFF: u32 = 0x00505050;
+// Sizes in px at 96 dpi; colours 0xRRGGBB.
+const WIDTH: f32 = 280.0;
+const RADIUS: f32 = 14.0;
+const SHADOW: f32 = 32.0;  // transparent margin around the card for its shadow
+const CARD: u32 = 0x2B2B2B;
+const ACCENT: u32 = 0x4CC2FF;  // Windows 11 dark-mode accent blue
 
 const SLIDE_IN: Duration = Duration::from_millis(220);
 const HOLD: Duration = Duration::from_millis(1300);
 const SLIDE_OUT: Duration = Duration::from_millis(180);
-const TOP_GAP: f32 = 12.0; // resting distance below the top of the work area, at 96 dpi
+const TOP_GAP: f32 = 12.0; // resting distance below the top of the work area
 const FRAME_TIMER: usize = 1;
 
 #[derive(Default, Clone)]
@@ -35,11 +37,29 @@ struct Anim { phase: Phase, x: i32, y_shown: i32, y_hidden: i32, y: i32 }
 thread_local! {
     static CONTENT: RefCell<Content> = RefCell::new(Content::default());
     static ANIM: RefCell<Anim> = RefCell::new(Anim { phase: Phase::Hidden, x: 0, y_shown: 0, y_hidden: 0, y: 0 });
+    static SURFACE: RefCell<Option<Surface>> = const { RefCell::new(None) };
+    static FACTORIES: (ID2D1Factory, IDWriteFactory) = unsafe {
+        (D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, None).expect("Direct2D"),
+         DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED).expect("DirectWrite"))
+    };
+}
+
+/// The rendered popup: a 32-bit premultiplied bitmap selected into a memory DC, card plus shadow margin.
+struct Surface { dc: HDC, bmp: HBITMAP, w: i32, h: i32 }
+
+impl Drop for Surface {
+    fn drop(&mut self) { unsafe { DeleteDC(self.dc); DeleteObject(self.bmp); } }
 }
 
 pub struct Popup { hwnd: HWND, scale: f32 }
 
 fn wide(s: &str) -> Vec<u16> { s.encode_utf16().chain(Some(0)).collect() }
+fn rgba(c: u32, a: f32) -> D2D1_COLOR_F {
+    D2D1_COLOR_F { r: (c >> 16 & 0xFF) as f32 / 255.0, g: (c >> 8 & 0xFF) as f32 / 255.0, b: (c & 0xFF) as f32 / 255.0, a }
+}
+fn rounded(left: f32, top: f32, right: f32, bottom: f32, r: f32) -> D2D1_ROUNDED_RECT {
+    D2D1_ROUNDED_RECT { rect: D2D_RECT_F { left, top, right, bottom }, radiusX: r, radiusY: r }
+}
 fn px(v: f32, s: f32) -> i32 { (v * s).round() as i32 }
 fn lerp(a: i32, b: i32, t: f32) -> i32 { a + ((b - a) as f32 * t).round() as i32 }
 fn progress(t0: Instant, d: Duration, now: Instant) -> f32 { (now.duration_since(t0).as_secs_f32() / d.as_secs_f32()).min(1.0) }
@@ -66,13 +86,10 @@ impl Popup {
         unsafe {
             let inst = GetModuleHandleW(std::ptr::null());
             let class = wide("KnurlPopup");
-            let wc = WNDCLASSW { lpfnWndProc: Some(wndproc), hInstance: inst, lpszClassName: class.as_ptr(),
-                                 style: CS_DROPSHADOW, hCursor: LoadCursorW(0, IDC_ARROW), ..std::mem::zeroed() };
+            let wc = WNDCLASSW { lpfnWndProc: Some(wndproc), hInstance: inst, lpszClassName: class.as_ptr(), ..std::mem::zeroed() };
             RegisterClassW(&wc);
-            let hwnd = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, class.as_ptr(), class.as_ptr(),
-                                       WS_POPUP, 0, 0, 10, 10, 0, 0, inst, std::ptr::null());
-            let round = DWMWCP_ROUND;   // Windows 11 rounded corners; ignored on Windows 10
-            DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE as u32, (&round as *const i32).cast(), 4);
+            let hwnd = CreateWindowExW(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                                       class.as_ptr(), class.as_ptr(), WS_POPUP, 0, 0, 10, 10, 0, 0, inst, std::ptr::null());
             Popup { hwnd, scale: GetDpiForSystem() as f32 / 96.0 }
         }
     }
@@ -80,9 +97,12 @@ impl Popup {
     /// `count` > 0 draws one dot per layer with `index` highlighted. While already showing, the text updates in
     /// place and the hold restarts; otherwise it slides in. The popup hides itself.
     pub fn show(&self, title: &str, subtitle: &str, index: usize, count: usize) {
-        CONTENT.with(|c| *c.borrow_mut() = Content { title: title.into(), subtitle: subtitle.into(), index, count });
+        let content = Content { title: title.into(), subtitle: subtitle.into(), index, count };
         let s = self.scale;
-        let (w, h) = (px(340.0, s), px(if count > 0 { 116.0 } else { 92.0 }, s));
+        let Ok(surface) = render(&content, s) else { return };
+        let (w, h, m) = (surface.w, surface.h, px(SHADOW, s));
+        CONTENT.with(|c| *c.borrow_mut() = content);
+        SURFACE.with(|c| *c.borrow_mut() = Some(surface));
         let now = Instant::now();
         let mut a = ANIM.with(|a| *a.borrow());
         a.phase = match a.phase {
@@ -96,9 +116,9 @@ impl Popup {
                     mi
                 };
                 a.x = (mi.rcWork.left + mi.rcWork.right - w) / 2;
-                a.y_shown = mi.rcWork.top + px(TOP_GAP, s);
+                a.y_shown = mi.rcWork.top + px(TOP_GAP, s) - m;
                 // ponytail: starts just above the monitor's top edge; a monitor stacked above would briefly show it
-                a.y_hidden = mi.rcMonitor.top - h - px(8.0, s);
+                a.y_hidden = mi.rcMonitor.top - h;
                 a.y = a.y_hidden;
                 Phase::In { t0: now, from: a.y_hidden }
             }
@@ -107,9 +127,9 @@ impl Popup {
             Phase::Hold { .. } => Phase::Hold { until: now + HOLD },
         };
         ANIM.with(|c| *c.borrow_mut() = a);
+        present(self.hwnd, a);
         unsafe {
-            SetWindowPos(self.hwnd, HWND_TOPMOST, a.x, a.y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
-            InvalidateRect(self.hwnd, std::ptr::null(), 1);
+            SetWindowPos(self.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
             SetTimer(self.hwnd, FRAME_TIMER, 10, None);   // ~64 fps in practice (system timer resolution)
         }
     }
@@ -117,66 +137,102 @@ impl Popup {
 
 fn on_frame(hwnd: HWND) {
     let a = ANIM.with(|c| { let a = step(*c.borrow(), Instant::now()); *c.borrow_mut() = a; a });
-    unsafe {
-        if let Phase::Hidden = a.phase {
-            KillTimer(hwnd, FRAME_TIMER);
-            ShowWindow(hwnd, SW_HIDE);
-        } else {
-            SetWindowPos(hwnd, HWND_TOPMOST, a.x, a.y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
-        }
+    if let Phase::Hidden = a.phase {
+        unsafe { KillTimer(hwnd, FRAME_TIMER); ShowWindow(hwnd, SW_HIDE); }
+    } else {
+        present(hwnd, a);
     }
 }
 
-fn font(height: i32, weight: i32) -> HFONT {
-    unsafe { CreateFontW(-height, 0, 0, 0, weight, 0, 0, 0, 0, 0, 0, CLEARTYPE_QUALITY as u32, 0, wide("Segoe UI").as_ptr()) }
+/// Puts the rendered popup on screen at the animation's position, fading with the slide.
+fn present(hwnd: HWND, a: Anim) {
+    let travel = (a.y - a.y_hidden) as f32 / (a.y_shown - a.y_hidden).max(1) as f32;
+    let alpha = (travel / 0.6).clamp(0.0, 1.0);    // fully opaque once 60% of the way down
+    SURFACE.with(|c| if let Some(sf) = c.borrow().as_ref() { unsafe {
+        let blend = BLENDFUNCTION { BlendOp: AC_SRC_OVER as u8, BlendFlags: 0, SourceConstantAlpha: (alpha * 255.0) as u8, AlphaFormat: AC_SRC_ALPHA as u8 };
+        UpdateLayeredWindow(hwnd, 0, &POINT { x: a.x, y: a.y }, &SIZE { cx: sf.w, cy: sf.h }, sf.dc, &POINT { x: 0, y: 0 }, 0, &blend, ULW_ALPHA);
+    } });
 }
 
-/// Draws one centred line in `r` and frees the font.
-fn text(dc: HDC, s: &str, f: HFONT, color: u32, mut r: RECT) {
-    let w: Vec<u16> = s.encode_utf16().collect();
-    unsafe {
-        let old = SelectObject(dc, f);
-        SetTextColor(dc, color);
-        DrawTextW(dc, w.as_ptr(), w.len() as i32, &mut r, DT_CENTER | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX);
-        SelectObject(dc, old);
-        DeleteObject(f);
-    }
-}
-
-fn paint(hwnd: HWND) { unsafe {
-    let mut ps: PAINTSTRUCT = std::mem::zeroed();
-    let dc = BeginPaint(hwnd, &mut ps);
-    let mut rc: RECT = std::mem::zeroed();
-    GetClientRect(hwnd, &mut rc);
-    let s = GetDpiForSystem() as f32 / 96.0;
-    let bg = CreateSolidBrush(BG);
-    FillRect(dc, &rc, bg);
-    DeleteObject(bg);
-    SetBkMode(dc, TRANSPARENT as i32);
-    let c = CONTENT.with(|c| c.borrow().clone());
-    let line = |top: f32, height: f32| RECT { left: px(16.0, s), right: rc.right - px(16.0, s), top: px(top, s), bottom: px(top + height, s) };
-    text(dc, &c.title, font(px(28.0, s), 600), TITLE, line(14.0, 40.0));
-    if !c.subtitle.is_empty() { text(dc, &c.subtitle, font(px(14.0, s), 400), SUB, line(54.0, 22.0)); }
-    if c.count > 0 {
-        let (r, gap) = (px(4.0, s), px(16.0, s));
-        let y = px(96.0, s);
-        let x0 = (rc.right - gap * (c.count as i32 - 1)) / 2;
-        SelectObject(dc, GetStockObject(NULL_PEN));
-        for i in 0..c.count {
-            let b = CreateSolidBrush(if i == c.index { DOT_ON } else { DOT_OFF });
-            let old = SelectObject(dc, b);
-            let x = x0 + gap * i as i32;
-            Ellipse(dc, x - r, y - r, x + r + 1, y + r + 1);
-            SelectObject(dc, old);
-            DeleteObject(b);
-        }
-    }
-    EndPaint(hwnd, &ps);
+fn text_format(dw: &IDWriteFactory, family: PCWSTR, weight: DWRITE_FONT_WEIGHT, size: f32) -> windows::core::Result<IDWriteTextFormat> { unsafe {
+    let f = dw.CreateTextFormat(family, None, weight, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, w!("en-us"))?;
+    f.SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
+    f.SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
+    f.SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)?;
+    let ellipsis = dw.CreateEllipsisTrimmingSign(&f)?;
+    f.SetTrimming(&DWRITE_TRIMMING { granularity: DWRITE_TRIMMING_GRANULARITY_CHARACTER, delimiter: 0, delimiterCount: 0 }, &ellipsis)?;
+    Ok(f)
 } }
+
+/// Draws the card: soft shadow, rounded fill with a hairline edge, title, subtitle and layer pips (the current one
+/// a wider accent pill). Windows 11 fonts; Windows 10 falls back to Segoe UI.
+fn render(c: &Content, s: f32) -> windows::core::Result<Surface> {
+    let m = px(SHADOW, s) as f32;
+    let (cw, ch) = (WIDTH * s, (if c.count > 0 { 96.0 } else { 76.0 }) * s);
+    let (w, h) = ((cw + 2.0 * m).ceil() as i32, (ch + 2.0 * m).ceil() as i32);
+    let surface = unsafe {
+        let dc = CreateCompatibleDC(0);
+        let mut bi: BITMAPINFO = std::mem::zeroed();
+        bi.bmiHeader = BITMAPINFOHEADER { biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32, biWidth: w, biHeight: -h,
+                                          biPlanes: 1, biBitCount: 32, biCompression: BI_RGB, ..std::mem::zeroed() };
+        let mut bits = std::ptr::null_mut();
+        let bmp = CreateDIBSection(dc, &bi, DIB_RGB_COLORS, &mut bits, 0, 0);
+        SelectObject(dc, bmp);
+        Surface { dc, bmp, w, h }
+    };
+    FACTORIES.with(|(d2d, dw)| unsafe {
+        let props = D2D1_RENDER_TARGET_PROPERTIES {
+            pixelFormat: D2D1_PIXEL_FORMAT { format: DXGI_FORMAT_B8G8R8A8_UNORM, alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED },
+            ..Default::default()
+        };
+        let rt = d2d.CreateDCRenderTarget(&props)?;
+        rt.BindDC(D2dHdc(surface.dc as _), &windows::Win32::Foundation::RECT { left: 0, top: 0, right: w, bottom: h })?;
+        rt.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE);   // ClearType can't blend onto transparency
+        rt.BeginDraw();
+        rt.Clear(Some(&rgba(0, 0.0)));
+        let brush = rt.CreateSolidColorBrush(&rgba(0, 0.0), None)?;
+        let (x0, y0, x1, y1, r) = (m, m, m + cw, m + ch, RADIUS * s);
+
+        brush.SetColor(&rgba(0, 0.022));   // shadow: stacked, growing translucent cards, a little below
+        for i in (1..=12).rev() {
+            let (k, dy) = (i as f32 * 2.0 * s, 6.0 * s);
+            rt.FillRoundedRectangle(&rounded(x0 - k, y0 - k + dy, x1 + k, y1 + k + dy, r + k), &brush);
+        }
+        brush.SetColor(&rgba(CARD, 1.0));
+        rt.FillRoundedRectangle(&rounded(x0, y0, x1, y1, r), &brush);
+        brush.SetColor(&rgba(0xFFFFFF, 0.09));
+        rt.DrawRoundedRectangle(&rounded(x0 + 0.5, y0 + 0.5, x1 - 0.5, y1 - 0.5, r), &brush, 1.0, None);
+
+        let line = |top: f32, height: f32| D2D_RECT_F { left: x0 + 16.0 * s, right: x1 - 16.0 * s, top: y0 + top * s, bottom: y0 + (top + height) * s };
+        let title: Vec<u16> = c.title.encode_utf16().collect();
+        brush.SetColor(&rgba(0xFFFFFF, 1.0));
+        rt.DrawText(&title, &text_format(dw, w!("Segoe UI Variable Display"), DWRITE_FONT_WEIGHT_SEMI_BOLD, 21.0 * s)?,
+                    &line(12.0, 32.0), &brush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+        if !c.subtitle.is_empty() {
+            let sub: Vec<u16> = c.subtitle.encode_utf16().collect();
+            brush.SetColor(&rgba(0xFFFFFF, 0.62));
+            rt.DrawText(&sub, &text_format(dw, w!("Segoe UI Variable Text"), DWRITE_FONT_WEIGHT_NORMAL, 13.0 * s)?,
+                        &line(44.0, 20.0), &brush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
+        }
+        if c.count > 0 {
+            let (dot, pill, gap) = (6.0 * s, 18.0 * s, 6.0 * s);
+            let mut x = x0 + (cw - (pill + (c.count - 1) as f32 * (dot + gap))) / 2.0;
+            let y = y0 + 76.0 * s;
+            for i in 0..c.count {
+                let current = i == c.index;
+                let len = if current { pill } else { dot };
+                brush.SetColor(&if current { rgba(ACCENT, 1.0) } else { rgba(0xFFFFFF, 0.28) });
+                rt.FillRoundedRectangle(&rounded(x, y - dot / 2.0, x + len, y + dot / 2.0, dot / 2.0), &brush);
+                x += len + gap;
+            }
+        }
+        rt.EndDraw(None, None)
+    })?;
+    Ok(surface)
+}
 
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
     match msg {
-        WM_PAINT => { paint(hwnd); 0 }
         WM_TIMER if wp == FRAME_TIMER => { on_frame(hwnd); 0 }
         WM_MOUSEACTIVATE => MA_NOACTIVATE as LRESULT,
         _ => unsafe { DefWindowProcW(hwnd, msg, wp, lp) },
