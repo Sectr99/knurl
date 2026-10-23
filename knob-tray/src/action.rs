@@ -6,10 +6,10 @@ use windows_sys::Win32::UI::{
     WindowsAndMessaging::SW_SHOWNORMAL,
 };
 
-const CTRL: u8 = 0x11;
-const SHIFT: u8 = 0x10;
-const ALT: u8 = 0x12;
-const WIN: u8 = 0x5B;
+pub(crate) const CTRL: u8 = 0x11;
+pub(crate) const SHIFT: u8 = 0x10;
+pub(crate) const ALT: u8 = 0x12;
+pub(crate) const WIN: u8 = 0x5B;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Kind {
@@ -21,21 +21,15 @@ pub enum Kind {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Step { mods: Vec<u8>, kind: Kind }
+pub struct Step { pub(crate) mods: Vec<u8>, pub(crate) kind: Kind }
 
 /// A sequence of steps; empty does nothing.
 #[derive(Debug, PartialEq, Clone, Default)]
-pub struct Action(Vec<Step>);
+pub struct Action(pub(crate) Vec<Step>);
 
 impl Action { pub fn is_empty(&self) -> bool { self.0.is_empty() } }
 
-pub const HELP: &str = "wheel:N, hwheel:N \u{2014} scroll (120 = one notch; negative = down / left)     click:left | middle | right\r\n\
-    Keys: a\u{2013}z 0\u{2013}9 f1\u{2013}f24 up down left right pageup pagedown home end\r\n\
-    \x20      space enter tab esc backspace delete insert plus [ ] , . ; / -\r\n\
-    Media: next prev playpause stop volup voldown mute     Modifiers: ctrl+ shift+ alt+ win+ (ctrl+wheel:120)\r\n\
-    run:<program, file or URL>     type:<text> (last)     Chain with ;  e.g. ctrl+c; alt+tab; ctrl+v";
-
-const NAMED: &[(&str, u8)] = &[
+pub(crate) const NAMED: &[(&str, u8)] = &[
     ("up", 0x26), ("down", 0x28), ("left", 0x25), ("right", 0x27), ("pageup", 0x21), ("pagedown", 0x22),
     ("home", 0x24), ("end", 0x23), ("insert", 0x2D), ("delete", 0x2E), ("backspace", 0x08), ("tab", 0x09),
     ("enter", 0x0D), ("esc", 0x1B), ("space", 0x20), ("plus", 0xBB), ("next", 0xB0), ("prev", 0xB1),
@@ -44,7 +38,7 @@ const NAMED: &[(&str, u8)] = &[
 const PUNCT: &[(u8, u8)] = &[(b';', 0xBA), (b'=', 0xBB), (b',', 0xBC), (b'-', 0xBD), (b'.', 0xBE), (b'/', 0xBF),
                              (b'`', 0xC0), (b'[', 0xDB), (b'\\', 0xDC), (b']', 0xDD), (b'\'', 0xDE)];
 
-fn key_code(name: &str) -> Option<u8> {
+pub(crate) fn key_code(name: &str) -> Option<u8> {
     let b = name.as_bytes();
     if b.len() == 1 {
         if b[0].is_ascii_lowercase() || b[0].is_ascii_digit() { return Some(b[0].to_ascii_uppercase()); }

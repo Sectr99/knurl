@@ -7,6 +7,7 @@ mod action;
 mod apps;
 mod config;
 mod knob;
+mod phrase;
 mod popup;
 mod settings;
 mod system;

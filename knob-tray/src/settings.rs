@@ -1,6 +1,6 @@
 //! Settings window: layer list on the left, the selected layer's editor and general options on the right.
 //! Edits go to a draft; Save validates and applies it. Closing the window only hides it.
-use crate::{action, apps, config::{self, Config, Layer, PRESETS}, knob::Gesture, App, WM_RECORDED};
+use crate::{action, apps, config::{self, Config, Layer, PAIRS}, knob::Gesture, phrase, App, WM_RECORDED};
 use native_windows_gui as nwg;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use windows_sys::Win32::{
@@ -12,17 +12,22 @@ use windows_sys::Win32::{
 
 const GESTURES: [(&str, Gesture); 3] = [("Double-tap", Gesture::DoubleTap), ("Triple-tap", Gesture::TripleTap), ("Tray menu only", Gesture::TrayOnly)];
 const ACTION_FIELDS: [&str; 5] = ["Turn clockwise", "Turn counter-clockwise", "Press", "Tap + turn clockwise", "Tap + turn counter-clockwise"];
+const PLACEHOLDERS: [&str; 5] = ["e.g. scroll down", "e.g. scroll up", "e.g. middle click", "e.g. zoom in", "e.g. zoom out"];
+const EXAMPLES: &str = "Write what each action should do, in plain words. For example:\r\n\
+    \x20  scroll down 3  \u{00B7}  zoom in  \u{00B7}  next track  \u{00B7}  volume up  \u{00B7}  copy  \u{00B7}  undo  \u{00B7}  new tab  \u{00B7}  middle click\r\n\
+    \x20  press ctrl shift z  \u{00B7}  hold shift and press tab  \u{00B7}  open notepad  \u{00B7}  go to youtube.com  \u{00B7}  type hello\r\n\
+    \x20  copy then paste (chain steps with \u{201C}then\u{201D})     Leave a box empty to do nothing. Record captures a shortcut.";
 
 #[derive(Default)]
 pub struct SettingsUi {
     pub win: nwg::Window,
     font_head: nwg::Font, font_small: nwg::Font,
-    h_layers: nwg::Label, h_layer: nwg::Label, h_general: nwg::Label, h_syntax: nwg::Label,
+    h_layers: nwg::Label, h_layer: nwg::Label, h_general: nwg::Label, h_examples: nwg::Label,
     list: nwg::ListBox<String>,
     b_add: nwg::Button, b_remove: nwg::Button, b_up: nwg::Button, b_down: nwg::Button,
     labels: [nwg::Label; 11],
-    t_name: nwg::TextInput, c_enabled: nwg::CheckBox, preset: nwg::ComboBox<String>,
-    actions: [nwg::TextInput; 5], rec: [nwg::Button; 5],
+    t_name: nwg::TextInput, c_enabled: nwg::CheckBox, turning: nwg::ComboBox<String>, c_reverse: nwg::CheckBox,
+    actions: [nwg::TextInput; 5], rec: [nwg::Button; 5], previews: [nwg::Label; 5],
     t_speed: nwg::TextInput, c_accel: nwg::CheckBox, l_max: nwg::Label, t_max: nwg::TextInput,
     t_apps: nwg::TextInput, add_app: nwg::ComboBox<String>,
     gesture: nwg::ComboBox<String>, t_window: nwg::TextInput,
@@ -33,7 +38,7 @@ pub struct SettingsUi {
 pub fn build(ui: &mut SettingsUi, icon: &nwg::Icon) -> Result<(), nwg::NwgError> {
     nwg::Font::builder().family("Segoe UI Semibold").size(18).build(&mut ui.font_head)?;
     nwg::Font::builder().family("Segoe UI").size(14).build(&mut ui.font_small)?;
-    nwg::Window::builder().flags(nwg::WindowFlags::WINDOW).size((920, 676)).center(true)
+    nwg::Window::builder().flags(nwg::WindowFlags::WINDOW).size((920, 720)).center(true)
         .icon(Some(icon)).title("Rotary knob \u{2014} settings").build(&mut ui.win)?;
     let w = &ui.win;
     let head = |l: &mut nwg::Label, t: &str, x: i32, y: i32, f: &nwg::Font| nwg::Label::builder().parent(w).text(t)
@@ -43,16 +48,18 @@ pub fn build(ui: &mut SettingsUi, icon: &nwg::Icon) -> Result<(), nwg::NwgError>
     let input = |t: &mut nwg::TextInput, x: i32, y: i32, wd: i32| nwg::TextInput::builder().parent(w).position((x, y)).size((wd, 24)).build(t);
 
     head(&mut ui.h_layers, "Layers", 20, 16, &ui.font_head)?;
-    nwg::ListBox::builder().parent(w).position((20, 48)).size((212, 516)).build(&mut ui.list)?;
-    button(&mut ui.b_add, "Add", 20, 574, 104)?;
-    button(&mut ui.b_remove, "Remove", 128, 574, 104)?;
-    button(&mut ui.b_up, "Move up", 20, 610, 104)?;
-    button(&mut ui.b_down, "Move down", 128, 610, 104)?;
+    nwg::ListBox::builder().parent(w).position((20, 48)).size((212, 560)).build(&mut ui.list)?;
+    button(&mut ui.b_add, "Add", 20, 618, 104)?;
+    button(&mut ui.b_remove, "Remove", 128, 618, 104)?;
+    button(&mut ui.b_up, "Move up", 20, 654, 104)?;
+    button(&mut ui.b_down, "Move down", 128, 654, 104)?;
 
-    let (lx, ix, iw, row, y0) = (256, 446, 280, 36, 48);
-    let ry = |r: i32| if r < 9 { y0 + r * row } else { y0 + r * row + 42 };   // rows 9+ sit under "General"
+    let (lx, ix, iw) = (256, 446, 280);
+    // row tops: name, turning, five action boxes (each with a preview line), speed, apps, then "General"
+    const ROWS: [i32; 11] = [48, 84, 120, 168, 216, 264, 312, 364, 400, 472, 508];
+    let ry = |r: i32| ROWS[r as usize];
     head(&mut ui.h_layer, "Layer", lx, 16, &ui.font_head)?;
-    let names = ["Name", "Preset", ACTION_FIELDS[0], ACTION_FIELDS[1], ACTION_FIELDS[2], ACTION_FIELDS[3], ACTION_FIELDS[4],
+    let names = ["Name", "Turning does", ACTION_FIELDS[0], ACTION_FIELDS[1], ACTION_FIELDS[2], ACTION_FIELDS[3], ACTION_FIELDS[4],
                  "Speed (\u{00D7})", "Apps (auto-switch)", "Layer switch gesture", "Tap window (ms)"];
     for (i, t) in names.iter().enumerate() {
         nwg::Label::builder().parent(w).text(t).position((lx, ry(i as i32) + 4)).size((185, 22)).build(&mut ui.labels[i])?;
@@ -60,10 +67,13 @@ pub fn build(ui: &mut SettingsUi, icon: &nwg::Icon) -> Result<(), nwg::NwgError>
     input(&mut ui.t_name, ix, ry(0) + 1, iw)?;
     nwg::CheckBox::builder().parent(w).text("Enabled").position((ix + iw + 12, ry(0))).size((110, 26)).build(&mut ui.c_enabled)?;
     nwg::ComboBox::builder().parent(w).position((ix, ry(1))).size((iw, 26))
-        .collection(PRESETS.iter().map(|p| p.0.to_string()).collect()).build(&mut ui.preset)?;
+        .collection(PAIRS.iter().map(|p| p.0.to_string()).collect()).build(&mut ui.turning)?;
+    nwg::CheckBox::builder().parent(w).text("Reverse").position((ix + iw + 12, ry(1))).size((110, 26)).build(&mut ui.c_reverse)?;
     for i in 0..5 {
-        input(&mut ui.actions[i], ix, ry(2 + i as i32) + 1, iw)?;
-        nwg::Button::builder().parent(w).text("Record").position((ix + iw + 8, ry(2 + i as i32))).size((76, 26)).build(&mut ui.rec[i])?;
+        let y = ry(2 + i as i32);
+        nwg::TextInput::builder().parent(w).position((ix, y + 1)).size((iw, 24)).placeholder_text(Some(PLACEHOLDERS[i])).build(&mut ui.actions[i])?;
+        nwg::Button::builder().parent(w).text("Record").position((ix + iw + 8, y)).size((76, 26)).build(&mut ui.rec[i])?;
+        nwg::Label::builder().parent(w).text("").position((ix, y + 27)).size((470, 18)).font(Some(&ui.font_small)).build(&mut ui.previews[i])?;
     }
     input(&mut ui.t_speed, ix, ry(7) + 1, 60)?;
     nwg::CheckBox::builder().parent(w).text("Accelerate").position((ix + 74, ry(7))).size((110, 26)).build(&mut ui.c_accel)?;
@@ -73,18 +83,18 @@ pub fn build(ui: &mut SettingsUi, icon: &nwg::Icon) -> Result<(), nwg::NwgError>
         .placeholder_text(Some("e.g. chrome, photoshop")).build(&mut ui.t_apps)?;
     nwg::ComboBox::builder().parent(w).position((ix + 158, ry(8))).size((iw - 158, 26)).build(&mut ui.add_app)?;
 
-    head(&mut ui.h_general, "General", lx, ry(9) - 34, &ui.font_head)?;
+    head(&mut ui.h_general, "General", lx, ry(9) - 32, &ui.font_head)?;
     nwg::ComboBox::builder().parent(w).position((ix, ry(9))).size((200, 26))
         .collection(GESTURES.iter().map(|g| g.0.to_string()).collect()).build(&mut ui.gesture)?;
     input(&mut ui.t_window, ix, ry(10) + 1, 80)?;
 
-    head(&mut ui.h_syntax, "Action syntax", lx, 494, &ui.font_head)?;
-    nwg::Label::builder().parent(w).text(action::HELP).position((lx, 522)).size((650, 100)).font(Some(&ui.font_small)).build(&mut ui.help)?;
-    button(&mut ui.b_import, "Import\u{2026}", lx, 630, 96)?;
-    button(&mut ui.b_export, "Export\u{2026}", lx + 104, 630, 96)?;
-    nwg::Label::builder().parent(w).text("").position((lx + 212, 637)).size((236, 22)).font(Some(&ui.font_small)).build(&mut ui.status)?;
-    button(&mut ui.b_save, "Save", 712, 630, 96)?;
-    button(&mut ui.b_close, "Close", 816, 630, 96)?;
+    head(&mut ui.h_examples, "Examples", lx, 552, &ui.font_head)?;
+    nwg::Label::builder().parent(w).text(EXAMPLES).position((lx, 580)).size((650, 80)).font(Some(&ui.font_small)).build(&mut ui.help)?;
+    button(&mut ui.b_import, "Import\u{2026}", lx, 674, 96)?;
+    button(&mut ui.b_export, "Export\u{2026}", lx + 104, 674, 96)?;
+    nwg::Label::builder().parent(w).text("").position((lx + 212, 681)).size((236, 22)).font(Some(&ui.font_small)).build(&mut ui.status)?;
+    button(&mut ui.b_save, "Save", 712, 674, 96)?;
+    button(&mut ui.b_close, "Close", 816, 674, 96)?;
     Ok(())
 }
 
@@ -154,8 +164,33 @@ impl App {
         ui.c_accel.set_check_state(if l.accelerate { nwg::CheckBoxState::Checked } else { nwg::CheckBoxState::Unchecked });
         ui.t_max.set_text(&l.max_per_sec.to_string());
         ui.t_apps.set_text(&l.apps.join(", "));
-        let matching = PRESETS.iter().skip(1).position(|p| (p.1, p.2, p.3) == (&*l.clockwise, &*l.counter_clockwise, &*l.press));
-        ui.preset.set_selection(Some(matching.map_or(0, |i| i + 1)));
+        self.sync_turning();
+        for i in 0..5 { self.update_preview(i); }
+    }
+
+    /// Show which "Turning does" pair the two turn boxes match (either way round), or Custom.
+    fn sync_turning(&self) {
+        let ui = &self.ui.s;
+        let (cw, ccw) = (ui.actions[0].text(), ui.actions[1].text());
+        let found = PAIRS.iter().enumerate().skip(1).find_map(|(i, p)| {
+            if phrase::same(p.1, &cw) && phrase::same(p.2, &ccw) { Some((i, false)) }
+            else if phrase::same(p.1, &ccw) && phrase::same(p.2, &cw) { Some((i, true)) }
+            else { None }
+        });
+        let (i, reversed) = found.unwrap_or((0, false));
+        ui.turning.set_selection(Some(i));
+        if found.is_some() {
+            ui.c_reverse.set_check_state(if reversed { nwg::CheckBoxState::Checked } else { nwg::CheckBoxState::Unchecked });
+        }
+    }
+
+    /// The line under an action box: what it will do, or why it isn't understood.
+    fn update_preview(&self, i: usize) {
+        let text = self.ui.s.actions[i].text();
+        let line = if text.trim().is_empty() { String::new() } else {
+            match phrase::describe(&text) { Ok(d) => format!("\u{2713}  {d}"), Err(e) => format!("\u{2717}  {e}") }
+        };
+        self.ui.s.previews[i].set_text(&line);
     }
 
     fn commit_fields(&self) {
@@ -176,17 +211,27 @@ impl App {
         };
     }
 
-    fn apply_preset(&self) {
+    /// "Turning does" picked: fill both turn boxes (honouring Reverse) and suggest a press if that box is empty.
+    fn apply_pair(&self) {
         let ui = &self.ui.s;
-        let Some(i) = ui.preset.selection().filter(|&i| i > 0) else { return };
-        let p = PRESETS[i];
-        ui.actions[0].set_text(p.1);
-        ui.actions[1].set_text(p.2);
-        ui.actions[2].set_text(p.3);
+        let Some(i) = ui.turning.selection().filter(|&i| i > 0) else { return };
+        let p = PAIRS[i];
+        let reversed = ui.c_reverse.check_state() == nwg::CheckBoxState::Checked;
+        ui.actions[0].set_text(if reversed { p.2 } else { p.1 });
+        ui.actions[1].set_text(if reversed { p.1 } else { p.2 });
+        if ui.actions[2].text().trim().is_empty() { ui.actions[2].set_text(p.3); }
         let name = ui.t_name.text();
-        if name.trim().is_empty() || name == "New layer" || PRESETS.iter().any(|q| q.0 == name) { ui.t_name.set_text(p.0); }
+        if name.trim().is_empty() || name == "New layer" || PAIRS.iter().any(|q| q.0 == name) { ui.t_name.set_text(p.0); }
         self.commit_fields();
         self.refresh_list();
+    }
+
+    fn reverse_turning(&self) {
+        let ui = &self.ui.s;
+        let (cw, ccw) = (ui.actions[0].text(), ui.actions[1].text());
+        ui.actions[0].set_text(&ccw);
+        ui.actions[1].set_text(&cw);
+        self.commit_fields();
     }
 
     fn add_running_app(&self) {
@@ -254,9 +299,8 @@ impl App {
         match action::combo_name(vk, mods & 1 != 0, mods & 2 != 0, mods & 4 != 0, mods & 8 != 0) {
             None => ui.status.set_text("That key can't be used in an action"),
             Some(combo) => {
-                ui.actions[field].set_text(&combo);
+                ui.actions[field].set_text(&combo);                  // preview and "Turning does" follow via OnTextInput
                 self.commit_fields();
-                self.load_fields();                                  // preset box shows "Custom" if it no longer matches
                 ui.status.set_text(&format!("Recorded {combo}"));
             }
         }
@@ -311,7 +355,12 @@ impl App {
                 self.refresh_list();
                 self.load_fields();
             }
-            E::OnComboxBoxSelection if h == ui.preset.handle => self.apply_preset(),
+            E::OnComboxBoxSelection if h == ui.turning.handle => self.apply_pair(),
+            E::OnButtonClick if h == ui.c_reverse.handle => self.reverse_turning(),
+            E::OnTextInput => if let Some(i) = ui.actions.iter().position(|t| t.handle == h) {
+                self.update_preview(i);
+                if i < 2 { self.sync_turning(); }
+            },
             E::OnComboxBoxSelection if h == ui.add_app.handle => self.add_running_app(),
             E::OnButtonClick if h == ui.c_enabled.handle => { self.commit_fields(); self.refresh_list(); }
             E::OnButtonClick if h == ui.b_add.handle => self.edit_list(|d, _| { d.push(Layer { name: "New layer".into(), ..Default::default() }); d.len() - 1 }),
