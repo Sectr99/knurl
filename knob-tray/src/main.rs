@@ -1,8 +1,10 @@
 //! Rotary knob tray app: F13/F15 (turn) and F14 (press) from the remapped knob drive per-layer actions.
-//! Double-tap the knob to switch layer. Tray menu: enable/disable, next layer, settings, start with Windows, quit.
+//! Double-tap the knob to switch layer, or let layers follow the focused app. Tray menu: enable/disable, next layer,
+//! per-app switching, settings, start with Windows, quit.
 #![windows_subsystem = "windows"]
 
 mod action;
+mod apps;
 mod knob;
 mod popup;
 
@@ -21,6 +23,9 @@ const VK_F13: u32 = 0x7C; // counter-clockwise
 const VK_F14: u32 = 0x7D; // press
 const VK_F15: u32 = 0x7E; // clockwise
 const TIMER_TAP: usize = 1;
+const TIMER_FOCUS: usize = 3;
+const FOCUS_SETTLE_MS: u32 = 150;   // ignore focus that only passes through (alt-tab, taskbar clicks)
+const WM_FOREGROUND: u32 = WM_APP + 1;
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 const APP_NAME: &str = "RotaryKnob";
 const ICON_ON: &[u8] = include_bytes!("../assets/knob_on.ico");
@@ -44,25 +49,30 @@ const PRESETS: &[(&str, &str, &str, &str)] = &[
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 #[serde(default)]
-struct Layer { name: String, clockwise: String, counter_clockwise: String, press: String }
+struct Layer { name: String, clockwise: String, counter_clockwise: String, press: String, apps: Vec<String> }
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(default)]
-struct Config { double_tap_ms: u64, layers: Vec<Layer> }
+struct Config { double_tap_ms: u64, layers: Vec<Layer>, auto_switch: bool }
 
 impl Default for Config {
     fn default() -> Self {
-        let l = |i: usize| { let p = PRESETS[i]; Layer { name: p.0.into(), clockwise: p.1.into(), counter_clockwise: p.2.into(), press: p.3.into() } };
-        Config { double_tap_ms: 350, layers: vec![l(1), l(3), l(4)] }
+        let l = |i: usize| { let p = PRESETS[i]; Layer { name: p.0.into(), clockwise: p.1.into(), counter_clockwise: p.2.into(), press: p.3.into(), apps: vec![] } };
+        Config { double_tap_ms: 350, layers: vec![l(1), l(3), l(4)], auto_switch: true }
     }
 }
 
 fn config_path() -> PathBuf {
     PathBuf::from(std::env::var("APPDATA").unwrap_or_else(|_| ".".into())).join(APP_NAME).join("config.json")
 }
-fn load_config() -> Config {
-    let c: Config = std::fs::read_to_string(config_path()).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-    if c.layers.is_empty() { Config::default() } else { c }
+/// Missing file -> defaults. An unreadable file -> defaults plus the reason, so it isn't silently replaced.
+fn load_config() -> (Config, Option<String>) {
+    let Ok(text) = std::fs::read_to_string(config_path()) else { return (Config::default(), None) };
+    match serde_json::from_str::<Config>(text.trim_start_matches('\u{feff}')) {   // editors may add a BOM
+        Ok(c) if !c.layers.is_empty() => (c, None),
+        Ok(_) => (Config::default(), Some("it has no layers".into())),
+        Err(e) => (Config::default(), Some(e.to_string())),
+    }
 }
 fn save_config(c: &Config) -> std::io::Result<()> {
     let p = config_path();
@@ -92,6 +102,7 @@ struct State {
     config: Config,
     parsed: Vec<[action::Action; 3]>, // clockwise, counter-clockwise, press per layer
     knob: knob::Knob,
+    manual_layer: usize,       // last layer picked by double-tap / tray; unlisted apps return here
     enabled: bool,
     draft: Vec<Layer>,         // settings window working copy
     draft_sel: Option<usize>,
@@ -107,6 +118,7 @@ struct Ui {
     menu: nwg::Menu,
     m_enabled: nwg::MenuItem,
     m_next: nwg::MenuItem,
+    m_auto: nwg::MenuItem,
     m_settings: nwg::MenuItem,
     m_startup: nwg::MenuItem,
     m_sep: nwg::MenuSeparator,
@@ -118,9 +130,10 @@ struct Ui {
     h_layers: nwg::Label, h_layer: nwg::Label, h_syntax: nwg::Label,
     list: nwg::ListBox<String>,
     b_add: nwg::Button, b_remove: nwg::Button, b_up: nwg::Button, b_down: nwg::Button,
-    labels: [nwg::Label; 6],
+    labels: [nwg::Label; 7],
     t_name: nwg::TextInput, preset: nwg::ComboBox<String>,
     t_cw: nwg::TextInput, t_ccw: nwg::TextInput, t_press: nwg::TextInput, t_double: nwg::TextInput,
+    t_apps: nwg::TextInput, add_app: nwg::ComboBox<String>,
     help: nwg::Label,
     status: nwg::Label,
     b_save: nwg::Button, b_close: nwg::Button,
@@ -143,9 +156,11 @@ impl App {
         self.popup.show(title, subtitle, i, n);
     }
 
-    fn flash_layer(&self) {
+    /// `app`: the program that switched the layer automatically, shown in the subtitle.
+    fn flash_layer(&self, app: Option<&str>) {
         let (name, i, n) = { let s = self.state.borrow(); (s.config.layers[s.knob.layer].name.clone(), s.knob.layer, s.config.layers.len()) };
-        self.flash(&name, &format!("Layer {} of {n}", i + 1), Some((i, n)));
+        let sub = match app { Some(a) => format!("Layer {} of {n}  \u{00B7}  {a}", i + 1), None => format!("Layer {} of {n}", i + 1) };
+        self.flash(&name, &sub, Some((i, n)));
     }
 
     fn set_enabled(&self, on: bool) {
@@ -164,7 +179,7 @@ impl App {
         }
         self.state.borrow_mut().enabled = on;
         self.refresh_tray();
-        if on { self.flash_layer() } else { self.flash("Knob paused", "Double-tap does nothing until re-enabled", None) }
+        if on { self.flash_layer(None) } else { self.flash("Knob paused", "Double-tap does nothing until re-enabled", None) }
     }
 
     fn refresh_tray(&self) {
@@ -173,6 +188,7 @@ impl App {
         self.ui.tray.set_icon(if s.enabled { &self.ui.icon_on } else { &self.ui.icon_off });
         self.ui.tray.set_tip(&if s.enabled { format!("Rotary knob \u{2014} {name}") } else { "Rotary knob \u{2014} paused".into() });
         self.ui.m_enabled.set_checked(s.enabled);
+        self.ui.m_auto.set_checked(s.config.auto_switch);
         self.ui.m_startup.set_checked(startup_enabled());
     }
 
@@ -189,7 +205,11 @@ impl App {
         };
         match act {
             Some(a) => action::perform(&a),
-            None => { self.flash_layer(); self.refresh_tray(); }
+            None => {
+                { let mut s = self.state.borrow_mut(); s.manual_layer = s.knob.layer; }
+                self.flash_layer(None);
+                self.refresh_tray();
+            }
         }
     }
 
@@ -213,6 +233,29 @@ impl App {
         if let Some(o) = out { self.run(o); }
     }
 
+    /// Focus has stayed on one window for FOCUS_SETTLE_MS: give it its layer, or the manual layer if unlisted.
+    fn on_focus_settled(&self) {
+        unsafe { KillTimer(Self::hwnd(&self.ui.msg.handle), TIMER_FOCUS) };
+        let Some(exe) = apps::foreground_exe() else { return };     // our own settings window, or unreadable
+        let (changed, matched) = {
+            let mut s = self.state.borrow_mut();
+            if !s.enabled || !s.config.auto_switch { return; }
+            let lists: Vec<Vec<String>> = s.config.layers.iter().map(|l| l.apps.clone()).collect();
+            let (target, matched) = apps::pick_layer(&lists, &exe, s.manual_layer);
+            let changed = target != s.knob.layer;
+            s.knob.layer = target;
+            (changed, matched)
+        };
+        if changed { self.flash_layer(matched.then_some(exe.as_str())); self.refresh_tray(); }
+    }
+
+    fn toggle_auto_switch(&self) {
+        let cfg = { let mut s = self.state.borrow_mut(); s.config.auto_switch = !s.config.auto_switch; s.config.clone() };
+        let _ = save_config(&cfg);
+        self.refresh_tray();
+        if cfg.auto_switch { self.on_focus_settled(); }
+    }
+
     // --- settings window ---
     fn open_settings(&self) {
         {
@@ -222,6 +265,10 @@ impl App {
             self.ui.t_double.set_text(&s.config.double_tap_ms.to_string());
         }
         self.ui.status.set_text("");
+        let mut running = vec!["Add running app\u{2026}".to_string()];
+        running.extend(apps::running_apps());
+        self.ui.add_app.set_collection(running);
+        self.ui.add_app.set_selection(Some(0));
         self.refresh_list();
         self.load_fields();
         self.ui.win.set_visible(true);
@@ -240,6 +287,7 @@ impl App {
         self.ui.t_cw.set_text(&l.clockwise);
         self.ui.t_ccw.set_text(&l.counter_clockwise);
         self.ui.t_press.set_text(&l.press);
+        self.ui.t_apps.set_text(&l.apps.join(", "));
         let matching = PRESETS.iter().skip(1).position(|p| (p.1, p.2, p.3) == (&*l.clockwise, &*l.counter_clockwise, &*l.press));
         self.ui.preset.set_selection(Some(matching.map_or(0, |i| i + 1)));
     }
@@ -256,11 +304,21 @@ impl App {
         self.refresh_list();
     }
 
+    fn add_running_app(&self) {
+        let Some(exe) = self.ui.add_app.selection().filter(|&i| i > 0).and_then(|_| self.ui.add_app.selection_string()) else { return };
+        let mut list = apps::parse_list(&self.ui.t_apps.text());
+        if !list.contains(&exe) { list.push(exe); }
+        self.ui.t_apps.set_text(&list.join(", "));
+        self.ui.add_app.set_selection(Some(0));
+        self.commit_fields();
+    }
+
     fn commit_fields(&self) {
         let mut s = self.state.borrow_mut();
         if let Some(i) = s.draft_sel {
             s.draft[i] = Layer { name: self.ui.t_name.text(), clockwise: self.ui.t_cw.text(),
-                                 counter_clockwise: self.ui.t_ccw.text(), press: self.ui.t_press.text() };
+                                 counter_clockwise: self.ui.t_ccw.text(), press: self.ui.t_press.text(),
+                                 apps: apps::parse_list(&self.ui.t_apps.text()) };
         }
     }
 
@@ -282,6 +340,10 @@ impl App {
         let result = parse_layers(&draft).and_then(|parsed| {
             let d: u64 = self.ui.t_double.text().trim().parse().map_err(|_| "Double-tap window must be a number".to_string())?;
             if !(100..=1000).contains(&d) { return Err("Double-tap window must be between 100 and 1000 ms".into()); }
+            let lists: Vec<Vec<String>> = draft.iter().map(|l| l.apps.clone()).collect();
+            if let Some((app, a, b)) = apps::duplicate(&lists) {
+                return Err(format!("'{app}' is listed on both '{}' and '{}'. An app can only switch to one layer.", draft[a].name, draft[b].name));
+            }
             Ok((parsed, d))
         });
         match result {
@@ -289,9 +351,11 @@ impl App {
             Ok((parsed, d)) => {
                 let cfg = {
                     let mut s = self.state.borrow_mut();
-                    s.config = Config { double_tap_ms: d, layers: draft };
+                    s.config = Config { double_tap_ms: d, layers: draft, auto_switch: s.config.auto_switch };
                     s.parsed = parsed;
-                    s.knob.layer = s.knob.layer.min(s.config.layers.len() - 1);
+                    let last = s.config.layers.len() - 1;
+                    s.knob.layer = s.knob.layer.min(last);
+                    s.manual_layer = s.manual_layer.min(last);
                     s.config.clone()
                 };
                 match save_config(&cfg) {
@@ -322,27 +386,28 @@ fn build_ui(ui: &mut Ui) -> Result<(), nwg::NwgError> {
     nwg::Menu::builder().popup(true).parent(&ui.msg).build(&mut ui.menu)?;
     nwg::MenuItem::builder().text("Enabled").parent(&ui.menu).build(&mut ui.m_enabled)?;
     nwg::MenuItem::builder().text("Next layer").parent(&ui.menu).build(&mut ui.m_next)?;
+    nwg::MenuItem::builder().text("Switch layers per app").parent(&ui.menu).build(&mut ui.m_auto)?;
     nwg::MenuItem::builder().text("Settings\u{2026}").parent(&ui.menu).build(&mut ui.m_settings)?;
     nwg::MenuItem::builder().text("Start with Windows").parent(&ui.menu).build(&mut ui.m_startup)?;
     nwg::MenuSeparator::builder().parent(&ui.menu).build(&mut ui.m_sep)?;
     nwg::MenuItem::builder().text("Quit").parent(&ui.menu).build(&mut ui.m_quit)?;
 
     // Settings window (closing it only hides it). Layout: layer list on the left, editor on the right.
-    nwg::Window::builder().flags(nwg::WindowFlags::WINDOW).size((740, 500)).center(true)
+    nwg::Window::builder().flags(nwg::WindowFlags::WINDOW).size((740, 540)).center(true)
         .icon(Some(&ui.icon_win)).title("Rotary knob \u{2014} settings").build(&mut ui.win)?;
     let w = &ui.win;
     let head = |l: &mut nwg::Label, t: &str, x: i32, y: i32, f: &nwg::Font| nwg::Label::builder().parent(w).text(t)
         .position((x, y)).size((300, 26)).font(Some(f)).build(l);
     head(&mut ui.h_layers, "Layers", 20, 16, &ui.font_head)?;
     head(&mut ui.h_layer, "Layer", 256, 16, &ui.font_head)?;
-    nwg::ListBox::builder().parent(w).position((20, 48)).size((212, 330)).build(&mut ui.list)?;
-    for (b, t, x, y) in [(&mut ui.b_add, "Add", 20, 388), (&mut ui.b_remove, "Remove", 128, 388),
-                         (&mut ui.b_up, "Move up", 20, 424), (&mut ui.b_down, "Move down", 128, 424)] {
+    nwg::ListBox::builder().parent(w).position((20, 48)).size((212, 366)).build(&mut ui.list)?;
+    for (b, t, x, y) in [(&mut ui.b_add, "Add", 20, 424), (&mut ui.b_remove, "Remove", 128, 424),
+                         (&mut ui.b_up, "Move up", 20, 460), (&mut ui.b_down, "Move down", 128, 460)] {
         nwg::Button::builder().parent(w).text(t).position((x, y)).size((104, 30)).build(b)?;
     }
 
     let (lx, ix, iw, row) = (256, 440, 280, 38);
-    for (i, t) in ["Name", "Preset", "Turn clockwise", "Turn counter-clockwise", "Press", "Double-tap window (ms)"].iter().enumerate() {
+    for (i, t) in ["Name", "Preset", "Turn clockwise", "Turn counter-clockwise", "Press", "Apps (auto-switch)", "Double-tap window (ms)"].iter().enumerate() {
         nwg::Label::builder().parent(w).text(t).position((lx, 52 + i as i32 * row)).size((180, 24)).build(&mut ui.labels[i])?;
     }
     nwg::TextInput::builder().parent(w).position((ix, 49)).size((iw, 24)).build(&mut ui.t_name)?;
@@ -351,13 +416,16 @@ fn build_ui(ui: &mut Ui) -> Result<(), nwg::NwgError> {
     for (i, t) in [&mut ui.t_cw, &mut ui.t_ccw, &mut ui.t_press].into_iter().enumerate() {
         nwg::TextInput::builder().parent(w).position((ix, 49 + (i as i32 + 2) * row)).size((iw, 24)).build(t)?;
     }
-    nwg::TextInput::builder().parent(w).position((ix, 49 + 5 * row)).size((80, 24)).build(&mut ui.t_double)?;
+    nwg::TextInput::builder().parent(w).position((ix, 49 + 5 * row)).size((150, 24))
+        .placeholder_text(Some("e.g. chrome, photoshop")).build(&mut ui.t_apps)?;
+    nwg::ComboBox::builder().parent(w).position((ix + 158, 48 + 5 * row)).size((iw - 158, 26)).build(&mut ui.add_app)?;
+    nwg::TextInput::builder().parent(w).position((ix, 49 + 6 * row)).size((80, 24)).build(&mut ui.t_double)?;
 
-    head(&mut ui.h_syntax, "Action syntax", lx, 290, &ui.font_head)?;
-    nwg::Label::builder().parent(w).text(action::HELP).position((lx, 320)).size((464, 100)).font(Some(&ui.font_small)).build(&mut ui.help)?;
-    nwg::Label::builder().parent(w).text("").position((lx, 430)).size((200, 24)).build(&mut ui.status)?;
-    nwg::Button::builder().parent(w).text("Save").position((520, 424)).size((96, 30)).build(&mut ui.b_save)?;
-    nwg::Button::builder().parent(w).text("Close").position((624, 424)).size((96, 30)).build(&mut ui.b_close)?;
+    head(&mut ui.h_syntax, "Action syntax", lx, 326, &ui.font_head)?;
+    nwg::Label::builder().parent(w).text(action::HELP).position((lx, 356)).size((464, 100)).font(Some(&ui.font_small)).build(&mut ui.help)?;
+    nwg::Label::builder().parent(w).text("").position((lx, 466)).size((200, 24)).build(&mut ui.status)?;
+    nwg::Button::builder().parent(w).text("Save").position((520, 460)).size((96, 30)).build(&mut ui.b_save)?;
+    nwg::Button::builder().parent(w).text("Close").position((624, 460)).size((96, 30)).build(&mut ui.b_close)?;
     Ok(())
 }
 
@@ -374,7 +442,11 @@ fn main() {
     }
     nwg::init().expect("init GUI");
 
-    let config = load_config();
+    let (config, load_error) = load_config();
+    if let Some(e) = load_error {
+        nwg::simple_message("Rotary knob", &format!("Couldn't read {}:\n{e}\n\nUsing default layers for now. \
+            The file is left as it is until you press Save in Settings.", config_path().display()));
+    }
     let parsed = parse_layers(&config.layers).unwrap_or_else(|e| {
         nwg::simple_message("Rotary knob", &format!("{e}\n\nUsing default layers."));
         parse_layers(&Config::default().layers).unwrap()
@@ -386,7 +458,7 @@ fn main() {
     let app = Rc::new(App {
         ui,
         popup: popup::Popup::new(),
-        state: RefCell::new(State { config, parsed, knob: Default::default(), enabled: false, draft: vec![], draft_sel: None }),
+        state: RefCell::new(State { config, parsed, knob: Default::default(), manual_layer: 0, enabled: false, draft: vec![], draft_sel: None }),
         start: Instant::now(),
     });
 
@@ -394,8 +466,11 @@ fn main() {
     let _raw = nwg::bind_raw_event_handler(&app.ui.msg.handle, 0x10000, move |_, msg, wp, lp| match msg {
         WM_HOTKEY => { a.on_hotkey(((lp as usize) >> 16) as u32); Some(0) }
         WM_TIMER if wp == TIMER_TAP => { a.on_tap_timeout(); Some(0) }
+        WM_FOREGROUND => { unsafe { SetTimer(App::hwnd(&a.ui.msg.handle), TIMER_FOCUS, FOCUS_SETTLE_MS, None) }; Some(0) }
+        WM_TIMER if wp == TIMER_FOCUS => { a.on_focus_settled(); Some(0) }
         _ => None,
     }).expect("raw handler");
+    apps::watch_foreground(App::hwnd(&app.ui.msg.handle), WM_FOREGROUND);
 
     let a = app.clone();
     let _tray = nwg::full_bind_event_handler(&app.ui.msg.handle, move |evt, _, h| {
@@ -413,6 +488,7 @@ fn main() {
                 { let mut s = a.state.borrow_mut(); s.knob.layer = (s.knob.layer + 1) % s.config.layers.len(); }
                 a.run(knob::Output::Layer(0));
             }
+            E::OnMenuItemSelected if h == ui.m_auto.handle => a.toggle_auto_switch(),
             E::OnMenuItemSelected if h == ui.m_settings.handle => a.open_settings(),
             E::OnMenuItemSelected if h == ui.m_startup.handle => { set_startup(!startup_enabled()); a.refresh_tray() }
             E::OnMenuItemSelected if h == ui.m_quit.handle => nwg::stop_thread_dispatch(),
@@ -432,6 +508,7 @@ fn main() {
                 a.load_fields();
             }
             E::OnComboxBoxSelection if h == ui.preset.handle => a.apply_preset(),
+            E::OnComboxBoxSelection if h == ui.add_app.handle => a.add_running_app(),
             E::OnButtonClick if h == ui.b_add.handle => a.edit_list(|d, _| { d.push(Layer { name: "New layer".into(), ..Default::default() }); d.len() - 1 }),
             E::OnButtonClick if h == ui.b_remove.handle => a.edit_list(|d, i| { if d.len() > 1 { d.remove(i); } i }),
             E::OnButtonClick if h == ui.b_up.handle => a.edit_list(|d, i| if i > 0 { d.swap(i, i - 1); i - 1 } else { i }),
@@ -443,6 +520,7 @@ fn main() {
     });
 
     app.set_enabled(true);
+    app.on_focus_settled();
     if std::env::args().any(|a| a == "--settings") { app.open_settings(); }
     nwg::dispatch_thread_events();
     app.set_enabled(false);
