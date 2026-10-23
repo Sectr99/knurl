@@ -45,19 +45,19 @@ pub fn set_startup(on: bool) {
 }
 
 pub fn installed_exe() -> PathBuf {
-    PathBuf::from(std::env::var("LOCALAPPDATA").unwrap_or_default()).join("Programs").join(APP_NAME).join("knob-tray.exe")
+    PathBuf::from(std::env::var("LOCALAPPDATA").unwrap_or_default()).join("Programs").join(APP_NAME).join("knurl.exe")
 }
 
 pub fn running_installed() -> bool {
     std::env::current_exe().ok().and_then(|p| p.canonicalize().ok()) == installed_exe().canonicalize().ok()
 }
 
-/// Copy this exe to %LOCALAPPDATA%\Programs\RotaryKnob and add a Start-menu shortcut.
+/// Copy this exe to %LOCALAPPDATA%\Programs\Knurl and add a Start-menu shortcut.
 pub fn install() -> Result<PathBuf, String> {
     let dest = installed_exe();
     std::fs::create_dir_all(dest.parent().unwrap()).map_err(|e| e.to_string())?;
     std::fs::copy(std::env::current_exe().map_err(|e| e.to_string())?, &dest).map_err(|e| format!("copy failed: {e}"))?;
-    let lnk = PathBuf::from(std::env::var("APPDATA").unwrap_or_default()).join(r"Microsoft\Windows\Start Menu\Programs\Rotary Knob.lnk");
+    let lnk = PathBuf::from(std::env::var("APPDATA").unwrap_or_default()).join(r"Microsoft\Windows\Start Menu\Programs\Knurl.lnk");
     // ponytail: shortcut via PowerShell's WScript.Shell; a native IShellLink needs the full COM bindings
     let script = format!("$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{}');$s.TargetPath='{}';$s.Save()",
                          lnk.display().to_string().replace('\'', "''"), dest.display().to_string().replace('\'', "''"));
@@ -186,7 +186,7 @@ mod tests {
         std::fs::create_dir_all(tmp.join(r"roaming\Microsoft\Windows\Start Menu\Programs")).unwrap();
         let dest = install().unwrap();
         assert!(dest.starts_with(&tmp) && dest.exists());
-        assert!(tmp.join(r"roaming\Microsoft\Windows\Start Menu\Programs\Rotary Knob.lnk").exists());
+        assert!(tmp.join(r"roaming\Microsoft\Windows\Start Menu\Programs\Knurl.lnk").exists());
         std::fs::remove_dir_all(&tmp).unwrap();
     }
 }

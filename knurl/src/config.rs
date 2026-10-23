@@ -1,9 +1,9 @@
-//! Layers and settings, stored as JSON in %APPDATA%\RotaryKnob\config.json.
+//! Layers and settings, stored as JSON in %APPDATA%\Knurl\config.json.
 use crate::{action, apps, knob::Gesture, names};
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, time::SystemTime};
 
-pub const APP_NAME: &str = "RotaryKnob";
+pub const APP_NAME: &str = "Knurl";
 
 /// "Turning does" choices: name, clockwise, counter-clockwise, suggested press. Index 0 is "Custom".
 pub const PAIRS: &[(&str, &str, &str, &str)] = &[

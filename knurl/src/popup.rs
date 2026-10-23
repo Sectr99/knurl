@@ -65,7 +65,7 @@ impl Popup {
     pub fn new() -> Popup {
         unsafe {
             let inst = GetModuleHandleW(std::ptr::null());
-            let class = wide("RotaryKnobPopup");
+            let class = wide("KnurlPopup");
             let wc = WNDCLASSW { lpfnWndProc: Some(wndproc), hInstance: inst, lpszClassName: class.as_ptr(),
                                  style: CS_DROPSHADOW, hCursor: LoadCursorW(0, IDC_ARROW), ..std::mem::zeroed() };
             RegisterClassW(&wc);

@@ -1,4 +1,4 @@
-# Only the app's source is committed (knob-tray/). Everything below stays local.
+# Only the app's source is committed (knurl/). Everything below stays local.
 
 # Rust build output
 target/

@@ -4,7 +4,7 @@ use embed_manifest::{embed_manifest, manifest::DpiAwareness, new_manifest};
 
 fn main() {
     if std::env::var_os("CARGO_CFG_WINDOWS").is_some() {
-        embed_manifest(new_manifest("RotaryKnob").dpi_awareness(DpiAwareness::System)).expect("embed manifest");
+        embed_manifest(new_manifest("Knurl").dpi_awareness(DpiAwareness::System)).expect("embed manifest");
     }
     println!("cargo:rerun-if-changed=build.rs");
 }

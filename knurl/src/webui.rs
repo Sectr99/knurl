@@ -25,7 +25,7 @@ pub struct Host { pub win: nwg::Window }
 pub fn build(h: &mut Host, icon: &nwg::Icon) -> Result<(), nwg::NwgError> {
     nwg::Window::builder()
         .flags(nwg::WindowFlags::WINDOW | nwg::WindowFlags::RESIZABLE | nwg::WindowFlags::MAXIMIZE_BOX)
-        .size((1080, 760)).center(true).icon(Some(icon)).title("Rotary knob \u{2014} settings").build(&mut h.win)
+        .size((1080, 760)).center(true).icon(Some(icon)).title("Knurl \u{2014} settings").build(&mut h.win)
 }
 
 struct Hwnd(isize);
@@ -40,7 +40,7 @@ impl HasWindowHandle for Hwnd {
 #[derive(Default)]
 pub struct Web { view: RefCell<Option<wry::WebView>>, inbox: Rc<RefCell<VecDeque<String>>> }
 
-// --- window size and position, kept in %APPDATA%\RotaryKnob\window.txt as "left top right bottom maximized" ---
+// --- window size and position, kept in %APPDATA%\Knurl\window.txt as "left top right bottom maximized" ---
 
 fn placement_path() -> std::path::PathBuf { config::path().with_file_name("window.txt") }
 
@@ -116,7 +116,7 @@ impl App {
             match built {
                 Ok(v) => *self.web.view.borrow_mut() = Some(v),
                 Err(e) => {
-                    nwg::modal_error_message(&self.ui.msg, "Rotary knob", &format!("Couldn't open settings (WebView2): {e}"));
+                    nwg::modal_error_message(&self.ui.msg, "Knurl", &format!("Couldn't open settings (WebView2): {e}"));
                     return;
                 }
             }
@@ -215,7 +215,7 @@ impl App {
                 json!({"ok": h != 0})
             }
             "stop_record" => { stop_hook(); self.state.borrow_mut().recording = None; json!({"ok": true}) }
-            "import" => match self.pick_file(nwg::FileDialogAction::Open, "Import knob settings") {
+            "import" => match self.pick_file(nwg::FileDialogAction::Open, "Import Knurl settings") {
                 None => json!({"cancelled": true}),
                 Some(path) => match std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|t| config::from_text(&t)) {
                     Ok(c) => json!({"config": c}),
@@ -225,7 +225,7 @@ impl App {
             "export" => {
                 let cfg: Config = serde_json::from_value(m.get("config")?.clone()).ok()?;
                 if let Err(e) = config::validate(&cfg) { return Some(json!({"error": e})); }
-                match self.pick_file(nwg::FileDialogAction::Save, "Export knob settings") {
+                match self.pick_file(nwg::FileDialogAction::Save, "Export Knurl settings") {
                     None => json!({"cancelled": true}),
                     Some(mut path) => {
                         if path.extension().is_none() { path.set_extension("json"); }
@@ -240,7 +240,7 @@ impl App {
 
     fn pick_file(&self, action: nwg::FileDialogAction, title: &str) -> Option<std::path::PathBuf> {
         let mut fd = nwg::FileDialog::default();
-        nwg::FileDialog::builder().title(title).action(action).filters("Knob settings (*.json)|All files (*.*)").build(&mut fd).ok()?;
+        nwg::FileDialog::builder().title(title).action(action).filters("Knurl settings (*.json)|All files (*.*)").build(&mut fd).ok()?;
         if !fd.run(Some(&self.ui.web.win)) { return None; }
         fd.get_selected_item().ok().map(std::path::PathBuf::from)
     }

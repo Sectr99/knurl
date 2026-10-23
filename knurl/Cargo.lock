@@ -947,7 +947,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "knob-tray"
+name = "knurl"
 version = "0.1.0"
 dependencies = [
  "embed-manifest",

@@ -1,4 +1,4 @@
-//! Rotary knob tray app: F13/F15 (turn) and F14 (press) from the remapped knob drive per-layer actions.
+//! Knurl: tray app for a rotary knob. F13/F15 (turn) and F14 (press) from the remapped knob drive per-layer actions.
 //! Layers switch by tap gesture or follow the focused app. Tray menu: enable, next layer, per-app switching,
 //! settings, knob setup, install, start with Windows, quit.
 #![windows_subsystem = "windows"]
@@ -96,7 +96,7 @@ impl App {
             if on {
                 for (id, vk) in [(1, VK_F13), (2, VK_F14), (3, VK_F15)] {
                     if RegisterHotKey(h, id, MOD_NOREPEAT, vk) == 0 {
-                        self.balloon("Rotary knob", "Another app has claimed F13-F15; the knob won't work until it's closed.");
+                        self.balloon("Knurl", "Another app has claimed F13-F15; the knob won't work until it's closed.");
                     }
                 }
             } else {
@@ -117,7 +117,7 @@ impl App {
             _ => String::new(),
         };
         self.ui.tray.set_icon(if s.enabled { &self.ui.icon_on } else { &self.ui.icon_off });
-        self.ui.tray.set_tip(&if s.enabled { format!("Rotary knob \u{2014} {name}{battery}") } else { format!("Rotary knob \u{2014} paused{battery}") });
+        self.ui.tray.set_tip(&if s.enabled { format!("Knurl \u{2014} {name}{battery}") } else { format!("Knurl \u{2014} paused{battery}") });
         self.ui.m_enabled.set_checked(s.enabled);
         self.ui.m_auto.set_checked(s.config.auto_switch);
         self.ui.m_next.set_enabled(s.config.layers.iter().filter(|l| l.enabled).count() > 1);
@@ -306,7 +306,7 @@ fn build_ui(ui: &mut Ui) -> Result<(), nwg::NwgError> {
     nwg::Font::set_global_default(Some(global));
 
     nwg::MessageWindow::builder().build(&mut ui.msg)?;
-    nwg::TrayNotification::builder().parent(&ui.msg).icon(Some(&ui.icon_on)).tip(Some("Rotary knob")).build(&mut ui.tray)?;
+    nwg::TrayNotification::builder().parent(&ui.msg).icon(Some(&ui.icon_on)).tip(Some("Knurl")).build(&mut ui.tray)?;
     nwg::Menu::builder().popup(true).parent(&ui.msg).build(&mut ui.menu)?;
     let item = |m: &mut nwg::MenuItem, t: &str| nwg::MenuItem::builder().text(t).parent(&ui.menu).build(m);
     item(&mut ui.m_enabled, "Enabled")?;
@@ -330,10 +330,10 @@ fn main() {
         let _ = std::fs::write(&p, format!("{info}\n"));
     }));
     unsafe {
-        INSTANCE_MUTEX.store(CreateMutexW(std::ptr::null(), 0, system::wide("RotaryKnobTraySingleInstance").as_ptr()), Ordering::Relaxed);
+        INSTANCE_MUTEX.store(CreateMutexW(std::ptr::null(), 0, system::wide("KnurlSingleInstance").as_ptr()), Ordering::Relaxed);
         if GetLastError() == ERROR_ALREADY_EXISTS {
             // already running: launching it again (e.g. from the Start menu) opens that copy's settings
-            let host = FindWindowW(std::ptr::null(), system::wide("Rotary knob \u{2014} settings").as_ptr());
+            let host = FindWindowW(std::ptr::null(), system::wide("Knurl \u{2014} settings").as_ptr());
             if host != 0 { PostMessageW(host, WM_OPEN_SETTINGS, 0, 0); }
             return;
         }
@@ -344,7 +344,7 @@ fn main() {
 
     let (config, load_error) = config::load();
     if let Some(e) = &load_error {
-        nwg::simple_message("Rotary knob", &format!("Couldn't read {}:\n{e}\n\nUsing default layers for now. \
+        nwg::simple_message("Knurl", &format!("Couldn't read {}:\n{e}\n\nUsing default layers for now. \
             The file is left as it is until you press Save in Settings.", config::path().display()));
     }
     let parsed = config::validate(&config).expect("defaults and loaded configs are valid");
