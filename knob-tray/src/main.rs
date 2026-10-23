@@ -87,6 +87,7 @@ impl App {
         let (name, i, n) = { let s = self.state.borrow(); (s.config.layers[s.knob.layer].name.clone(), s.knob.layer, s.config.layers.len()) };
         let sub = match app { Some(a) => format!("Layer {} of {n}  \u{00B7}  {a}", i + 1), None => format!("Layer {} of {n}", i + 1) };
         self.popup.show(&name, &sub, i, n);
+        self.notify_active();
     }
 
     fn set_enabled(&self, on: bool, announce: bool) {
@@ -374,7 +375,7 @@ fn main() {
         WM_FOREGROUND => { unsafe { SetTimer(a.msg_hwnd(), TIMER_FOCUS, FOCUS_SETTLE_MS, None) }; Some(0) }
         WM_RECORDED => { a.on_recorded(wp as u8, lp as u32); Some(0) }
         WM_WEB => { a.on_web_message(); Some(0) }
-        WM_SETTINGS_CLOSED => { a.close_settings(); Some(0) }
+        WM_SETTINGS_CLOSED => { a.request_close(); Some(0) }
         WM_INPUT => { a.on_raw_input(lp); None }                    // None: default processing frees the input
         _ => None,
     }).expect("raw handler");

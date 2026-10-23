@@ -8,22 +8,30 @@
     --accent: #0078d4;
     --text: #1b1b1b; --muted: #5c5c5c; --faint: #8a8a8a;
     --bg: #f3f3f3; --side: #ebebeb; --panel: #fbfbfb; --panel-hover: #ffffff;
-    --field: #ffffff; --field-border: rgba(0,0,0,.12); --border: rgba(0,0,0,.07);
-    --kbd: #f7f7f7; --kbd-edge: rgba(0,0,0,.18); --chip: color-mix(in srgb, var(--accent) 13%, var(--field));
-    --danger: #c42b1c; --ok: #0f7b0f; --shadow: 0 1px 2px rgba(0,0,0,.05), 0 2px 6px rgba(0,0,0,.04);
+    --field: #ffffff; --field-border: rgba(0,0,0,.14); --border: rgba(0,0,0,.08);
+    --kbd: #f7f7f7; --kbd-edge: rgba(0,0,0,.2); --chip: color-mix(in srgb, var(--accent) 13%, var(--field));
+    --accent-text: color-mix(in srgb, var(--accent) 85%, black);
+    --danger: #c42b1c; --shadow: 0 1px 2px rgba(0,0,0,.05), 0 2px 6px rgba(0,0,0,.04);
+    --overlay: rgba(0,0,0,.25);
   }
   html.dark {
     --text: #f3f3f3; --muted: #b8b8b8; --faint: #8b8b8b;
     --bg: #202020; --side: #1b1b1b; --panel: #2b2b2b; --panel-hover: #333333;
-    --field: #1e1e1e; --field-border: rgba(255,255,255,.09); --border: rgba(255,255,255,.06);
+    --field: #1e1e1e; --field-border: rgba(255,255,255,.1); --border: rgba(255,255,255,.06);
     --kbd: #3a3a3a; --kbd-edge: rgba(0,0,0,.55); --chip: color-mix(in srgb, var(--accent) 30%, var(--panel));
-    --danger: #ff99a4; --ok: #6ccb5f; --shadow: 0 1px 2px rgba(0,0,0,.3);
+    --accent-text: color-mix(in srgb, var(--accent) 55%, white);
+    --danger: #ff99a4; --shadow: 0 1px 2px rgba(0,0,0,.3);
+    --overlay: rgba(0,0,0,.5);
   }
+  [hidden] { display: none !important; }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
   body { font: 14px/1.4 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--text);
          background: var(--bg); user-select: none; -webkit-font-smoothing: antialiased; }
   button, input { font: inherit; color: inherit; }
+  button { cursor: default; }
+  :focus { outline: none; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
   svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
   .app { display: grid; grid-template-columns: 264px 1fr; grid-template-rows: 1fr auto; grid-template-areas: "side main" "side bar"; height: 100vh; }
@@ -31,90 +39,94 @@
   /* --- sidebar --- */
   .side { grid-area: side; background: var(--side); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 18px 12px 12px; gap: 6px; min-height: 0; }
   .brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 14px; }
-  .brand .logo { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; color: #fff;
-                 box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); }
-  .brand .logo svg { width: 18px; height: 18px; stroke-width: 2.4; }
+  .brand .logo { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; color: #fff; box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); }
+  .brand .logo svg { stroke-width: 2.4; }
   .brand b { display: block; font-size: 15px; }
   .brand span { font-size: 12px; color: var(--muted); }
   .label { font-size: 12px; font-weight: 600; color: var(--muted); padding: 4px 10px; letter-spacing: .02em; }
-  #layers { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; min-height: 0; padding-right: 2px; }
-  .layer { text-align: left; border: 1px solid transparent; background: transparent; border-radius: 8px; padding: 9px 10px 9px 14px;
-           cursor: default; position: relative; transition: background .12s; }
+  #layers { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; min-height: 0; padding: 2px; }
+  .layer { text-align: left; border: 1px solid transparent; background: transparent; border-radius: 8px; padding: 9px 10px 9px 14px; position: relative; transition: background .12s; }
   .layer:hover { background: var(--panel); }
   .layer.sel { background: var(--panel-hover); border-color: var(--border); box-shadow: var(--shadow); }
   .layer.sel::before { content: ""; position: absolute; left: 4px; top: 12px; bottom: 12px; width: 3px; border-radius: 3px; background: var(--accent); }
+  .layer.off { opacity: .55; }
+  .layer.dragging { opacity: .4; }
+  .layer.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+  .layer.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
   .layer .name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
-  .layer .lnum { font-size: 11px; color: var(--faint); font-weight: 400; margin-left: auto; }
+  .layer .name span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .live { font-size: 10.5px; font-weight: 600; color: var(--accent-text); background: var(--chip); border-radius: 8px; padding: 1px 7px; flex: none; }
+  .lnum { font-size: 11px; color: var(--faint); font-weight: 400; margin-left: auto; flex: none; }
   .layer .sum { font-size: 12px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .layer .apps { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
-  .layer.off { opacity: .55; }
   .tag { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--chip); }
   .grow { flex: 1; }
-  .side-btn { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; padding: 9px 12px; border-radius: 8px; text-align: left; cursor: default; }
+  .side-btn { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; padding: 9px 12px; border-radius: 8px; text-align: left; }
   .side-btn:hover { background: var(--panel); }
   .side-btn.sel { background: var(--panel-hover); box-shadow: var(--shadow); }
-  .side-btn.add { color: var(--accent); font-weight: 600; }
-  .side { position: relative; }
-  .menu { position: absolute; left: 12px; right: 12px; z-index: 5; overflow-y: auto; background: var(--panel-hover); border: 1px solid var(--border); border-radius: 10px;
-          box-shadow: 0 10px 30px rgba(0,0,0,.28); padding: 6px; display: flex; flex-direction: column; gap: 2px; animation: fade .12s ease-out; }
-  .menu[hidden] { display: none; }
-  .menu button { display: flex; gap: 10px; align-items: flex-start; text-align: left; border: 0; background: transparent; border-radius: 7px; padding: 8px 10px; }
-  .menu button:hover { background: var(--chip); }
-  .menu svg { margin-top: 1px; color: var(--muted); }
-  .menu b { display: block; font-weight: 600; }
-  .menu small { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; margin-top: 1px; }
-  html.dark .side-btn.add { color: color-mix(in srgb, var(--accent) 55%, white); }
+  .side-btn.add { color: var(--accent-text); font-weight: 600; }
 
   /* --- main --- */
   main { grid-area: main; overflow-y: auto; padding: 22px 28px 28px; min-height: 0; }
   .page { display: flex; flex-direction: column; gap: 14px; max-width: 900px; margin: 0 auto; animation: fade .18s ease-out; }
   @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-  .title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 2px; }
+  .title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 2px; position: relative; }
   .title { flex: 1; font-size: 26px; font-weight: 600; border: 1px solid transparent; background: transparent; border-radius: 8px; padding: 2px 8px; margin-left: -9px; min-width: 0; }
   .title:hover { background: var(--panel); }
-  .title:focus { outline: none; background: var(--field); border-color: var(--field-border); border-bottom: 2px solid var(--accent); }
+  .title:focus { background: var(--field); border-color: var(--field-border); border-bottom: 2px solid var(--accent); outline: none; }
   h1 { font-size: 26px; font-weight: 600; margin: 2px 0; }
   h2 { font-size: 14px; font-weight: 600; margin: 0; }
   .muted { color: var(--muted); font-size: 12.5px; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; box-shadow: var(--shadow); }
-  .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .card-head { display: flex; align-items: center; gap: 12px; }
+  .card-head + * { margin-top: 12px; }
   .card-head .muted { margin-left: auto; }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .icon-btn { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid transparent; background: transparent; border-radius: 6px; color: var(--muted); }
+  .icon-btn { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid transparent; background: transparent; border-radius: 7px; color: var(--muted); }
   .icon-btn:hover { background: var(--panel-hover); border-color: var(--border); color: var(--text); }
-  .icon-btn.danger:hover { color: var(--danger); }
-  .icon-btn:disabled { opacity: .35; pointer-events: none; }
+
+  /* popover menus */
+  .pop { position: absolute; z-index: 20; background: var(--panel-hover); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.28);
+         padding: 5px; display: flex; flex-direction: column; min-width: 170px; animation: fade .12s ease-out; }
+  .pop button { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; border-radius: 6px; padding: 7px 10px; text-align: left; }
+  .pop button:hover, .pop button.hl { background: var(--chip); }
+  .pop button:disabled { opacity: .4; pointer-events: none; }
+  .pop button.danger { color: var(--danger); }
+  .pop hr { border: 0; border-top: 1px solid var(--border); margin: 4px 2px; }
 
   /* switch */
-  .switch { display: inline-flex; align-items: center; gap: 10px; cursor: default; }
-  .switch input { appearance: none; width: 40px; height: 20px; border-radius: 10px; border: 1px solid var(--faint); position: relative; margin: 0; transition: .15s; background: transparent; }
+  .switch { display: inline-flex; align-items: center; gap: 10px; }
+  .switch input { appearance: none; width: 40px; height: 20px; border-radius: 10px; border: 1px solid var(--faint); position: relative; margin: 0; transition: .15s; background: transparent; flex: none; }
   .switch input::after { content: ""; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--muted); top: 3px; left: 4px; transition: .15s; }
   .switch input:checked { background: var(--accent); border-color: var(--accent); }
   .switch input:checked::after { left: 22px; background: #fff; }
   .switch:hover input::after { transform: scale(1.12); }
 
-  /* tiles */
-  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 8px; }
-  .tile { border: 1px solid var(--border); background: var(--panel-hover); border-radius: 10px; padding: 12px 10px 10px; display: flex; flex-direction: column;
-          align-items: flex-start; gap: 8px; text-align: left; transition: transform .1s, border-color .12s, background .12s; }
-  .tile:hover { transform: translateY(-1px); border-color: var(--field-border); }
-  .tile svg { width: 22px; height: 22px; color: var(--muted); }
-  .tile span { font-size: 12.5px; font-weight: 500; line-height: 1.2; }
+  /* turning picker */
+  .picker { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px 0 12px; border-radius: 8px; border: 1px solid var(--field-border); background: var(--field); min-width: 240px; }
+  .picker:hover { border-color: var(--faint); }
+  .picker svg { color: var(--accent-text); }
+  .picker .chev { margin-left: auto; color: var(--muted); transition: transform .15s; }
+  .picker.open .chev { transform: rotate(180deg); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; animation: fade .15s ease-out; }
+  .tile { border: 1px solid var(--border); background: var(--panel-hover); border-radius: 8px; height: 40px; padding: 0 10px; display: flex; align-items: center; gap: 9px; text-align: left; transition: border-color .12s, background .12s; }
+  .tile:hover { border-color: var(--field-border); }
+  .tile svg { color: var(--muted); }
+  .tile span { font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tile.sel { border-color: var(--accent); background: var(--chip); box-shadow: 0 0 0 1px var(--accent) inset; }
-  .tile.sel svg { color: var(--accent); }
-  html.dark .tile.sel svg { color: color-mix(in srgb, var(--accent) 55%, white); }
+  .tile.sel svg { color: var(--accent-text); }
 
   /* action rows */
-  .actions { display: flex; flex-direction: column; gap: 4px; }
   .action { display: grid; grid-template-columns: 210px 1fr auto; align-items: start; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border); }
-  .action:first-child { border-top: 0; }
-  .alabel { display: flex; align-items: center; gap: 10px; padding-top: 7px; }
-  .alabel .glyph { width: 30px; height: 30px; border-radius: 8px; background: var(--panel-hover); border: 1px solid var(--border); display: grid; place-items: center; color: var(--muted); }
+  .actions > .action:first-child { border-top: 0; }
+  .alabel { display: flex; align-items: center; gap: 10px; padding-top: 7px; min-width: 0; }
+  .alabel .glyph { width: 30px; height: 30px; border-radius: 8px; background: var(--panel-hover); border: 1px solid var(--border); display: grid; place-items: center; color: var(--muted); flex: none; }
   .alabel b { font-weight: 500; }
   .alabel small { display: block; color: var(--faint); font-size: 11.5px; margin-top: -1px; }
   .field { position: relative; min-height: 36px; border-radius: 7px; background: var(--field); border: 1px solid var(--field-border); border-bottom-color: var(--faint); transition: border-color .12s; }
   .field:hover { border-color: var(--faint); }
   .field input { width: 100%; height: 34px; border: 0; background: transparent; padding: 0 11px; outline: none; font-family: inherit; }
+  .field input::placeholder { color: var(--faint); font-style: italic; }
   .field .chips { position: absolute; inset: 0; display: none; align-items: center; gap: 5px; padding: 0 9px; overflow: hidden; white-space: nowrap; cursor: text; background: var(--field); border-radius: 7px; }
   .field.show-chips .chips { display: flex; }
   .field.show-chips input { color: transparent; }
@@ -122,12 +134,14 @@
   .field.bad { border-color: var(--danger); }
   .field.recording { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); animation: pulse 1.2s ease-in-out infinite; }
   @keyframes pulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 12%, transparent); } }
+  .suggest { top: calc(100% + 4px); left: 0; right: 0; max-height: 260px; overflow-y: auto; }
+  .suggest button { justify-content: space-between; }
+  .suggest small { color: var(--faint); font-size: 11.5px; }
   .err { grid-column: 2 / 4; font-size: 12.5px; color: var(--danger); display: flex; gap: 8px; align-items: center; margin-top: -4px; }
   .err:empty { display: none; }
   .fix { border: 0; background: var(--chip); color: var(--text); border-radius: 12px; padding: 1px 10px; font-size: 12px; }
   .fix:hover { filter: brightness(1.1); }
-  kbd { font: 12px/1 "Segoe UI Variable Text", "Segoe UI", sans-serif; padding: 5px 8px 4px; border-radius: 5px; background: var(--kbd); border: 1px solid var(--kbd-edge);
-        border-bottom-width: 2px; min-width: 24px; text-align: center; }
+  kbd { font: 12px/1 "Segoe UI Variable Text", "Segoe UI", sans-serif; padding: 5px 8px 4px; border-radius: 5px; background: var(--kbd); border: 1px solid var(--kbd-edge); border-bottom-width: 2px; min-width: 24px; text-align: center; }
   .plus { color: var(--faint); font-size: 11px; }
   .fn { font-size: 12.5px; font-weight: 500; padding: 4px 10px; border-radius: 12px; background: var(--chip); display: inline-flex; align-items: center; gap: 5px; }
   .fn svg { width: 13px; height: 13px; }
@@ -136,13 +150,19 @@
   .rec { height: 36px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border-radius: 7px; border: 1px solid var(--field-border); background: var(--panel-hover); }
   .rec:hover { border-color: var(--faint); }
   .rec.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .disclose { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; border-top: 1px solid var(--border); background: transparent; padding: 12px 0 4px; text-align: left; color: var(--muted); }
+  .disclose:hover { color: var(--text); }
+  .disclose .chev { transition: transform .15s; }
+  .disclose.open .chev { transform: rotate(90deg); }
+  .disclose b { color: var(--text); font-weight: 500; }
+  .disclose .count { font-size: 11px; background: var(--chip); color: var(--text); border-radius: 8px; padding: 0 7px; }
 
   /* feel + apps */
   .row { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--border); }
-  .row:first-of-type { border-top: 0; }
+  .card-head + .row { border-top: 0; }
   .row > .grow { min-width: 0; }
   .row small { display: block; color: var(--faint); font-size: 11.5px; }
-  input[type=range] { appearance: none; width: 170px; height: 4px; border-radius: 2px; background: var(--field-border); outline: none; }
+  input[type=range] { appearance: none; width: 120px; height: 4px; border-radius: 2px; background: var(--field-border); outline: none; flex: none; }
   input[type=range]::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 4px solid var(--field); box-shadow: 0 0 0 1px var(--field-border); }
   .val { min-width: 54px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
   .num { width: 70px; height: 32px; border-radius: 6px; border: 1px solid var(--field-border); background: var(--field); padding: 0 8px; outline: none; }
@@ -168,17 +188,39 @@
   .ref { display: flex; flex-wrap: wrap; gap: 6px; }
   .ref .fn { font-weight: 400; }
 
+  /* dialogs */
+  .overlay { position: fixed; inset: 0; background: var(--overlay); z-index: 30; display: grid; place-items: center; animation: fadein .15s ease-out; }
+  @keyframes fadein { from { opacity: 0; } }
+  .dialog { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 24px 60px rgba(0,0,0,.35); padding: 22px 24px; max-width: min(820px, 92vw); max-height: 86vh; display: flex; flex-direction: column; gap: 14px; animation: rise .18s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+  .dialog h2 { font-size: 18px; }
+  .dialog .actions-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; overflow-y: auto; padding: 2px; }
+  .tcard { border: 1px solid var(--border); background: var(--panel-hover); border-radius: 10px; padding: 14px; display: flex; gap: 12px; text-align: left; align-items: flex-start; transition: border-color .12s, transform .1s; }
+  .tcard:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .tcard .ticon { width: 36px; height: 36px; border-radius: 9px; background: var(--chip); display: grid; place-items: center; color: var(--accent-text); flex: none; }
+  .tcard b { display: block; font-weight: 600; margin-bottom: 2px; }
+  .tcard small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+
   /* footer + toast */
   .bar { grid-area: bar; display: flex; align-items: center; gap: 10px; padding: 12px 28px; border-top: 1px solid var(--border); background: var(--side); }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: none; }
   .bar.dirty .dot { display: block; }
   #status { color: var(--muted); font-size: 13px; }
-  #toast { position: fixed; right: 28px; bottom: 72px; transform: translateY(10px); opacity: 0; transition: .22s; pointer-events: none;
-           background: var(--panel-hover); border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 10px 16px; border-radius: 10px;
-           display: flex; gap: 10px; align-items: center; max-width: 70vw; backdrop-filter: blur(20px); }
+  #toast { position: fixed; right: 28px; bottom: 72px; transform: translateY(10px); opacity: 0; transition: .22s; pointer-events: none; z-index: 40;
+           background: var(--panel-hover); border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 10px 16px; border-radius: 10px; max-width: 60vw; }
   #toast.show { opacity: 1; transform: none; }
   #toast.error { color: var(--danger); }
   ::-webkit-scrollbar { width: 10px; } ::-webkit-scrollbar-thumb { background: var(--field-border); border-radius: 5px; border: 3px solid transparent; background-clip: content-box; }
+
+  /* narrow windows */
+  @media (max-width: 1000px) { .cols { grid-template-columns: 1fr; } .action { grid-template-columns: 170px 1fr auto; } }
+  @media (max-width: 820px) {
+    .app { grid-template-columns: 210px 1fr; }
+    .action { grid-template-columns: 1fr auto; } .alabel { grid-column: 1 / 3; padding-top: 0; } .err { grid-column: 1 / 3; }
+    .rec span { display: none; }
+    main { padding: 18px 18px 24px; }
+  }
 </style>
 </head>
 <body>
@@ -190,38 +232,49 @@
     </div>
     <div class="label">Layers</div>
     <div id="layers"></div>
-    <button class="side-btn add" id="add-layer"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New layer</button>
-    <div class="menu" id="add-menu" hidden></div>
+    <button class="side-btn add" id="add-layer" title="Add a blank layer or start from a template"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>New layer</button>
     <div class="grow"></div>
-    <button class="side-btn" id="nav-general"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>General</button>
+    <button class="side-btn" id="nav-general"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/></svg>General</button>
   </aside>
 
   <main>
     <section class="page" id="page-layer">
       <div class="title-row">
-        <input class="title" id="layer-name" spellcheck="false" maxlength="40">
-        <label class="switch"><input type="checkbox" id="layer-enabled"><span class="muted">Enabled</span></label>
-        <button class="icon-btn" id="move-up" title="Move up"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></button>
-        <button class="icon-btn" id="move-down" title="Move down"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
-        <button class="icon-btn danger" id="delete" title="Delete layer"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+        <input class="title" id="layer-name" spellcheck="false" maxlength="40" title="Layer name">
+        <label class="switch" title="Turn off to skip this layer when switching"><input type="checkbox" id="layer-enabled"><span class="muted">Enabled</span></label>
+        <button class="icon-btn" id="more" title="More"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+        <div class="pop" id="more-menu" hidden style="right:0; top:42px">
+          <button id="move-up"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>Move up</button>
+          <button id="move-down"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>Move down</button>
+          <hr>
+          <button id="delete" class="danger"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>Delete layer</button>
+        </div>
       </div>
 
       <div class="card">
-        <div class="card-head"><h2>Turning</h2>
-          <label class="switch" style="margin-left:auto"><span class="muted">Reverse direction</span><input type="checkbox" id="reverse"></label>
+        <div class="card-head">
+          <h2>Turning</h2>
+          <button class="picker" id="picker" title="Choose what turning the knob does"></button>
+          <label class="switch" style="margin-left:auto" title="Swap which way the knob turns: clockwise and counter-clockwise trade actions"><span class="muted">Reverse direction</span><input type="checkbox" id="reverse"></label>
         </div>
-        <div class="tiles" id="tiles"></div>
+        <div class="tiles" id="tiles" hidden></div>
       </div>
 
       <div class="card">
         <div class="card-head"><h2>Actions</h2><span class="muted">Key names joined with +, or a function name. Separate steps with a comma.</span></div>
         <div class="actions" id="actions"></div>
+        <button class="disclose" id="disclose">
+          <svg class="chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
+          <span><b>Tap, then turn</b> &nbsp;<span class="muted">Tap the knob, then turn within a moment for two more actions</span></span>
+          <span class="count" id="tap-count" hidden></span>
+        </button>
+        <div class="actions" id="tap-actions" hidden></div>
       </div>
 
       <div class="cols">
         <div class="card">
           <div class="card-head"><h2>Feel</h2></div>
-          <div class="row"><div class="grow">Speed<small>Scroll distance and key repeats per click</small></div>
+          <div class="row"><div class="grow">Speed<small>Scroll distance, volume step and key repeats per click</small></div>
             <input type="range" id="speed" min="0.25" max="5" step="0.25"><span class="val" id="speed-val"></span></div>
           <div class="row"><div class="grow">Accelerate<small>Go further when you spin quickly</small></div>
             <label class="switch"><input type="checkbox" id="accel"></label></div>
@@ -229,10 +282,11 @@
             <input class="num" type="number" id="maxps" min="0" max="50"></div>
         </div>
         <div class="card">
-          <div class="card-head"><h2>Apps</h2><span class="muted">Switch here automatically. title:text matches window titles</span></div>
+          <div class="card-head"><h2>Apps</h2><span class="muted">Switch here automatically</span></div>
           <div class="chiplist" id="app-chips"></div>
           <div class="add-row">
-            <input class="text-in" id="app-input" list="running" placeholder="Program (chrome) or title:YouTube" spellcheck="false">
+            <input class="text-in" id="app-input" list="running" placeholder="Program (chrome) or title:YouTube" spellcheck="false"
+                   title="A program name switches when that program is focused; title:text when a window's title contains the text">
             <datalist id="running"></datalist>
             <button class="btn" id="app-add">Add</button>
           </div>
@@ -258,10 +312,10 @@
       </div>
       <div class="card">
         <div class="card-head"><h2>Names you can use</h2></div>
-        <div class="muted" style="margin-bottom:10px">Any key as written on the keyboard, joined with + &nbsp;
-          <kbd>Ctrl</kbd> <span class="plus">+</span> <kbd>Shift</kbd> <span class="plus">+</span> <kbd>Z</kbd> &nbsp;
-          <kbd>Page Up</kbd> &nbsp;<kbd>F5</kbd> &nbsp;<kbd>Up Arrow</kbd>. &nbsp;Plus these functions, and <span class="fn">Open …</span> <span class="fn">Type …</span>.
-          &nbsp;Any program's own volume in the Windows mixer: <span class="fn">Discord Volume +</span> <span class="fn">Discord Volume -</span> <span class="fn">Discord Mute</span></div>
+        <div class="muted" style="margin-bottom:10px; line-height:2">Any key as written on the keyboard, joined with + &nbsp;
+          <kbd>Ctrl</kbd> <span class="plus">+</span> <kbd>Shift</kbd> <span class="plus">+</span> <kbd>Z</kbd> &nbsp;<kbd>Page Up</kbd> &nbsp;<kbd>F5</kbd> &nbsp;<kbd>Up Arrow</kbd>,
+          these functions, <span class="fn">Open …</span> <span class="fn">Type …</span>, and any program's own mixer volume:
+          <span class="fn">Discord Volume +</span> <span class="fn">Discord Volume -</span> <span class="fn">Discord Mute</span></div>
         <div class="ref" id="ref"></div>
       </div>
     </section>
@@ -271,8 +325,24 @@
     <span class="dot"></span><span id="status">All changes saved</span>
     <div class="grow"></div>
     <button class="btn" id="revert" disabled>Revert</button>
-    <button class="btn accent" id="save" disabled>Save</button>
+    <button class="btn accent" id="save" disabled title="Save (Ctrl+S)">Save</button>
   </footer>
+</div>
+
+<div class="overlay" id="gallery" hidden>
+  <div class="dialog" style="width: 820px">
+    <div class="card-head"><h2>New layer</h2><span class="muted">Start blank or from a template. You can change everything afterwards.</span></div>
+    <div class="gallery" id="gallery-grid"></div>
+    <div class="actions-row"><button class="btn" id="gallery-cancel">Cancel</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="confirm" hidden>
+  <div class="dialog" style="width: 420px">
+    <h2 id="confirm-title"></h2>
+    <div class="muted" id="confirm-text" style="font-size:13.5px"></div>
+    <div class="actions-row" id="confirm-buttons"></div>
+  </div>
 </div>
 <div id="toast"></div>
 
@@ -293,6 +363,7 @@ function call(cmd, args = {}) {
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const svg = d => `<svg viewBox="0 0 24 24">${d}</svg>`;
+const CHEV_DOWN = '<path d="m6 9 6 6 6-6"/>';
 
 const ICONS = {
   custom: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
@@ -309,28 +380,60 @@ const ICONS = {
   brush: '<path d="M18 3 9 12l3 3 9-9-3-3z"/><path d="M9 12c-3 0-5 2-5 5 0 1-1 3-2 3 2 1 6 1 8-1 1.5-1.5 2-4 2-4"/>',
 };
 const PAIR_ICONS = ["custom", "scroll", "scrollh", "zoom", "volume", "tracks", "undo", "arrowsv", "arrowsh", "page", "tabs", "brush"];
+const TEMPLATE_ICONS = {
+  Discord: '<path d="M7 17c-2-1-3-3-3-7l2-4c2-1 4-1 4-1l.5 1h3l.5-1s2 0 4 1l2 4c0 4-1 6-3 7l-1-2"/><circle cx="9.5" cy="12" r="1"/><circle cx="14.5" cy="12" r="1"/>',
+  YouTube: '<rect x="3" y="6" width="18" height="12" rx="4"/><path d="m10.5 9.5 4 2.5-4 2.5z"/>',
+  Spotify: '<circle cx="12" cy="12" r="9"/><path d="M7.5 9.5c3-1 6.5-.7 9 .8M8 12.6c2.5-.7 5.2-.4 7.2.8M8.6 15.5c2-.5 3.9-.3 5.5.6"/>',
+  "Video editing": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4"/>',
+  "VS Code": '<path d="m9 8-5 4 5 4M15 8l5 4-5 4"/>',
+  "Teams call": '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>',
+  "Zoom call": '<rect x="3" y="7" width="12" height="10" rx="2"/><path d="m15 11 6-3v8l-6-3"/>',
+  Photoshop: ICONS.brush,
+  Figma: '<path d="M12 3H9a3 3 0 0 0 0 6h3zM12 9H9a3 3 0 0 0 0 6h3zM12 3h3a3 3 0 0 1 0 6h-3zM12 15H9a3 3 0 1 0 3 3zM15 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/>',
+  Excel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14h18M9 4v16"/>',
+};
+// [key, label, hint, placeholder, icon]; the last two are the "Tap, then turn" pair
 const FIELDS = [
-  ["clockwise", "Turn clockwise", "Turn right", "e.g. Scroll Down", '<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/>'],
-  ["counter_clockwise", "Turn counter-clockwise", "Turn left", "e.g. Scroll Up", '<path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5"/>'],
-  ["press", "Press", "Tap the knob", "e.g. Middle Click", '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/>'],
-  ["shift_clockwise", "Tap + turn clockwise", "Tap, then turn right", "e.g. Zoom +", '<circle cx="6" cy="12" r="2"/><path d="M21 12a6 6 0 1 1-1.8-4.3M21 6v4h-4"/>'],
-  ["shift_counter_clockwise", "Tap + turn counter-clockwise", "Tap, then turn left", "e.g. Zoom -", '<circle cx="18" cy="12" r="2"/><path d="M3 12a6 6 0 1 0 1.8-4.3M3 6v4h4"/>'],
+  ["clockwise", "Turn clockwise", "Turn right", "Not set, e.g. Scroll Down", '<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/>'],
+  ["counter_clockwise", "Turn counter-clockwise", "Turn left", "Not set, e.g. Scroll Up", '<path d="M4 12a8 8 0 1 0 2.3-5.7M4 4v5h5"/>'],
+  ["press", "Press", "Tap the knob", "Not set, e.g. Middle Click", '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/>'],
+  ["shift_clockwise", "Tap + turn clockwise", "Tap, then turn right", "Not set, e.g. Zoom +", '<circle cx="6" cy="12" r="2"/><path d="M21 12a6 6 0 1 1-1.8-4.3M21 6v4h-4"/>'],
+  ["shift_counter_clockwise", "Tap + turn counter-clockwise", "Tap, then turn left", "Not set, e.g. Zoom -", '<circle cx="18" cy="12" r="2"/><path d="M3 12a6 6 0 1 0 1.8-4.3M3 6v4h4"/>'],
 ];
 const GESTURES = [["double_tap", "Double-tap"], ["triple_tap", "Triple-tap"], ["tray_only", "Tray menu only"]];
+const KEYS = ["Enter", "Esc", "Space", "Tab", "Backspace", "Delete", "Insert", "Home", "End", "Page Up", "Page Down",
+  "Up Arrow", "Down Arrow", "Left Arrow", "Right Arrow", "Plus", ...Array.from({ length: 24 }, (_, i) => `F${i + 1}`),
+  ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split(""), "[", "]", ",", ".", "/", ";", "-"];
+const MODS = ["Ctrl", "Shift", "Alt", "Win"];
 
-const S = { cfg: null, saved: "", sel: 0, page: "layer", pairs: [], functions: [], templates: [], recording: null, pairOf: [] };
-const appLabel = a => a.startsWith("title:") ? `title: ${a.slice(6)}` : a;
+const S = { cfg: null, saved: "", sel: 0, page: "layer", pairs: [], functions: [], templates: [], apps: [], active: 0,
+            recording: null, pairOf: [], tapOpen: false, pickerOpen: false };
 const L = () => S.cfg.layers[S.sel];
+const appLabel = a => a.startsWith("title:") ? `title: ${a.slice(6)}` : a;
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 
-// --- toast + dirty state ---
+// --- toast, dialogs, dirty state ---
 let toastTimer;
 function toast(text, error = false) {
   const t = $("toast");
   t.textContent = text; t.classList.toggle("error", error); t.classList.add("show");
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), error ? 5000 : 2200);
 }
+function ask(title, text, buttons) {          // buttons: [[label, value, cls]] -> resolves with the value (Esc = null)
+  return new Promise(resolve => {
+    $("confirm-title").textContent = title; $("confirm-text").textContent = text;
+    $("confirm-buttons").innerHTML = buttons.map(([l, v, c]) => `<button class="btn ${c || ""}" data-v="${esc(v)}">${esc(l)}</button>`).join("");
+    $("confirm").hidden = false;
+    const done = v => { $("confirm").hidden = true; document.removeEventListener("keydown", onKey, true); resolve(v); };
+    const onKey = e => { if (e.key === "Escape") { e.stopPropagation(); done(null); } };
+    document.addEventListener("keydown", onKey, true);
+    $("confirm-buttons").onclick = e => { const b = e.target.closest("button"); if (b) done(b.dataset.v); };
+    $("confirm-buttons").querySelector(".accent")?.focus();
+  });
+}
+const isDirty = () => JSON.stringify(S.cfg) !== S.saved;
 function changed() {
-  const dirty = JSON.stringify(S.cfg) !== S.saved;
+  const dirty = isDirty();
   $("bar").classList.toggle("dirty", dirty);
   $("status").textContent = dirty ? "Unsaved changes" : "All changes saved";
   $("save").disabled = $("revert").disabled = !dirty;
@@ -339,15 +442,21 @@ function changed() {
 // --- sidebar ---
 function summary(l, i) {
   const p = S.pairOf[i];
-  if (p && p.index > 0) return S.pairs[p.index].name + (p.reversed ? " (reversed)" : "");
-  return [l.clockwise, l.counter_clockwise].filter(Boolean).join(" / ") || "No turn actions";
+  let turn = p && p.index > 0 ? S.pairs[p.index].name + (p.reversed ? " (reversed)" : "") : "";
+  if (!turn && l.clockwise && l.counter_clockwise) {   // "Discord Volume +" / "Discord Volume -" -> "Discord Volume"
+    const a = l.clockwise.replace(/\s*[+-]$/, ""), b = l.counter_clockwise.replace(/\s*[+-]$/, "");
+    turn = a.toLowerCase() === b.toLowerCase() ? a : `${l.clockwise} / ${l.counter_clockwise}`;
+  }
+  turn = turn || l.clockwise || l.counter_clockwise;
+  return [turn, l.press].filter(Boolean).join(" · ") || "Nothing set yet";
 }
 function renderSidebar() {
   const n = S.cfg.layers.length;
   $("brand-sub").textContent = `${n} layer${n === 1 ? "" : "s"}`;
   $("layers").innerHTML = S.cfg.layers.map((l, i) => `
-    <button class="layer ${S.page === "layer" && i === S.sel ? "sel" : ""} ${l.enabled ? "" : "off"}" data-i="${i}">
-      <div class="name">${esc(l.name || "Untitled")}<span class="lnum">${l.enabled ? i + 1 : "off"}</span></div>
+    <button class="layer ${S.page === "layer" && i === S.sel ? "sel" : ""} ${l.enabled ? "" : "off"}" data-i="${i}" draggable="true"
+            title="Drag to reorder">
+      <div class="name"><span>${esc(l.name || "Untitled")}</span>${i === S.active && l.enabled ? '<span class="live" title="The knob is on this layer now">Active</span>' : ""}<span class="lnum">${l.enabled ? i + 1 : "off"}</span></div>
       <div class="sum">${esc(summary(l, i))}</div>
       ${l.apps.length ? `<div class="apps">${l.apps.slice(0, 4).map(a => `<span class="tag">${esc(appLabel(a))}</span>`).join("")}${l.apps.length > 4 ? `<span class="tag">+${l.apps.length - 4}</span>` : ""}</div>` : ""}
     </button>`).join("");
@@ -357,23 +466,58 @@ $("layers").addEventListener("click", e => {
   const b = e.target.closest(".layer"); if (!b) return;
   stopRecording(); S.sel = +b.dataset.i; S.page = "layer"; render();
 });
+handlers.active = ({ index }) => { S.active = index; renderSidebar(); };
 
-// --- layer page ---
-function renderTiles(index) {
-  $("tiles").innerHTML = S.pairs.map((p, i) => `
-    <button class="tile ${i === index ? "sel" : ""}" data-i="${i}">${svg(ICONS[PAIR_ICONS[i]] || ICONS.custom)}<span>${esc(p.name)}</span></button>`).join("");
+// drag to reorder
+let dragFrom = null;
+$("layers").addEventListener("dragstart", e => { const b = e.target.closest(".layer"); if (!b) return; dragFrom = +b.dataset.i; b.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; });
+$("layers").addEventListener("dragend", () => { dragFrom = null; renderSidebar(); });
+$("layers").addEventListener("dragover", e => {
+  const b = e.target.closest(".layer"); if (!b || dragFrom === null) return;
+  e.preventDefault();
+  document.querySelectorAll(".drop-before,.drop-after").forEach(x => x.classList.remove("drop-before", "drop-after"));
+  const r = b.getBoundingClientRect();
+  b.classList.add(e.clientY < r.top + r.height / 2 ? "drop-before" : "drop-after");
+});
+$("layers").addEventListener("drop", e => {
+  const b = e.target.closest(".layer"); if (!b || dragFrom === null) return;
+  e.preventDefault();
+  const r = b.getBoundingClientRect();
+  let to = +b.dataset.i + (e.clientY < r.top + r.height / 2 ? 0 : 1);
+  if (to > dragFrom) to--;
+  moveLayer(dragFrom, to);
+});
+function moveLayer(from, to) {
+  const ls = S.cfg.layers; if (to === from || to < 0 || to >= ls.length) { renderSidebar(); return; }
+  const selLayer = ls[S.sel];
+  const [l] = ls.splice(from, 1); ls.splice(to, 0, l);
+  const [p] = S.pairOf.splice(from, 1); S.pairOf.splice(to, 0, p);
+  S.sel = ls.indexOf(selLayer); render(); changed();
 }
+
+// --- turning picker ---
+function renderPicker() {
+  const idx = S.pairOf[S.sel]?.index ?? 0, p = S.pairs[idx];
+  $("picker").innerHTML = `${svg(ICONS[PAIR_ICONS[idx]] || ICONS.custom)}<span>${esc(p ? p.name : "Custom")}</span><svg class="chev" viewBox="0 0 24 24">${CHEV_DOWN}</svg>`;
+  $("picker").classList.toggle("open", S.pickerOpen);
+  $("tiles").hidden = !S.pickerOpen;
+  $("tiles").innerHTML = S.pairs.map((p, i) => `
+    <button class="tile ${i === idx ? "sel" : ""}" data-i="${i}">${svg(ICONS[PAIR_ICONS[i]] || ICONS.custom)}<span>${esc(p.name)}</span></button>`).join("");
+}
+$("picker").addEventListener("click", () => { S.pickerOpen = !S.pickerOpen; renderPicker(); });
+const refreshAllPairs = () => S.cfg.layers.forEach((_, i) => { if (i !== S.sel) refreshPair(i); });   // the selected one refreshes on render
 async function refreshPair(i = S.sel) {
   const l = S.cfg.layers[i];
   const r = await call("pair", { cw: l.clockwise, ccw: l.counter_clockwise });
   S.pairOf[i] = r;
-  if (i === S.sel && S.page === "layer") { renderTiles(r.index); if (r.index > 0) $("reverse").checked = r.reversed; }
+  if (i === S.sel && S.page === "layer") { renderPicker(); if (r.index > 0) $("reverse").checked = r.reversed; }
   renderSidebar();
 }
 $("tiles").addEventListener("click", e => {
   const t = e.target.closest(".tile"); if (!t) return;
   const i = +t.dataset.i, p = S.pairs[i], l = L();
-  if (i === 0) { renderTiles(0); return; }
+  S.pickerOpen = false;
+  if (i === 0) { renderPicker(); return; }
   const rev = $("reverse").checked;
   l.clockwise = rev ? p.ccw : p.cw; l.counter_clockwise = rev ? p.cw : p.ccw;
   if (!l.press.trim()) l.press = p.press;
@@ -385,6 +529,7 @@ $("reverse").addEventListener("change", () => {
   renderActions(); refreshPair(); changed();
 });
 
+// --- action fields ---
 function chipsHtml(steps) {
   return steps.map(st => {
     const mods = (st.mods || []).map(m => `<kbd>${esc(m)}</kbd><span class="plus">+</span>`).join("");
@@ -394,24 +539,35 @@ function chipsHtml(steps) {
     return `<span class="fn">${svg('<path d="M5 6h14M12 6v13M9 19h6"/>')}Type</span><span class="arg">“${esc(st.text)}”</span>`;
   }).join('<span class="then">→</span>');
 }
-
-function renderActions() {
-  $("actions").innerHTML = FIELDS.map(([key, label, hint, ph, icon], i) => `
+function actionRow(i) {
+  const [key, label, hint, ph, icon] = FIELDS[i];
+  return `
     <div class="action" data-i="${i}">
       <div class="alabel"><div class="glyph">${svg(icon)}</div><div><b>${label}</b><small>${hint}</small></div></div>
       <div class="field" id="field-${i}">
         <input id="in-${i}" placeholder="${ph}" spellcheck="false" autocomplete="off" value="${esc(L()[key])}">
         <div class="chips" id="chips-${i}"></div>
+        <div class="pop suggest" id="sug-${i}" hidden></div>
       </div>
-      <button class="rec" id="rec-${i}">${svg('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h0M11 10h0M15 10h0M7 14h10"/>')}Record</button>
+      <button class="rec" id="rec-${i}" title="Record a keyboard shortcut">${svg('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h0M11 10h0M15 10h0M7 14h10"/>')}<span>Record</span></button>
       <div class="err" id="err-${i}"></div>
-    </div>`).join("");
+    </div>`;
+}
+function renderActions() {
+  $("actions").innerHTML = [0, 1, 2].map(actionRow).join("");
+  $("tap-actions").innerHTML = [3, 4].map(actionRow).join("");
+  const set = [3, 4].filter(i => L()[FIELDS[i][0]].trim()).length;
+  $("tap-count").hidden = !set; $("tap-count").textContent = `${set} set`;
+  $("tap-actions").hidden = !S.tapOpen;
+  $("disclose").classList.toggle("open", S.tapOpen);
   FIELDS.forEach((_, i) => check(i));
 }
+$("disclose").addEventListener("click", () => { S.tapOpen = !S.tapOpen; $("tap-actions").hidden = !S.tapOpen; $("disclose").classList.toggle("open", S.tapOpen); });
 
 const checkTimers = {};
 async function check(i) {
-  const text = $(`in-${i}`).value, field = $(`field-${i}`);
+  const input = $(`in-${i}`); if (!input) return;
+  const text = input.value, field = $(`field-${i}`);
   const r = await call("check", { text });
   if ($(`in-${i}`)?.value !== text) return;                       // superseded by newer typing
   const err = $(`err-${i}`);
@@ -419,40 +575,78 @@ async function check(i) {
   if (r.ok) {
     err.innerHTML = "";
     $(`chips-${i}`).innerHTML = chipsHtml(r.steps);
-    field.classList.toggle("show-chips", r.steps.length > 0 && document.activeElement !== $(`in-${i}`));
+    field.classList.toggle("show-chips", r.steps.length > 0 && document.activeElement !== input);
   } else {
     field.classList.remove("show-chips");
     const p = r.problem;
     err.innerHTML = `<span>${esc(p.message)}</span>` + (p.fix ? `<button class="fix" data-i="${i}" data-step="${esc(p.step)}" data-fix="${esc(p.fix)}">Use ‘${esc(p.fix)}’</button>` : "");
   }
 }
-$("actions").addEventListener("input", e => {
-  const m = e.target.id.match(/^in-(\d)$/); if (!m) return;
-  const i = +m[1]; L()[FIELDS[i][0]] = e.target.value; changed();
-  clearTimeout(checkTimers[i]); checkTimers[i] = setTimeout(() => { check(i); if (i < 2) refreshPair(); }, 120);
-});
-$("actions").addEventListener("focusin", e => {
-  const m = e.target.id.match(/^in-(\d)$/); if (!m) return;
-  $(`field-${m[1]}`).classList.add("focus"); $(`field-${m[1]}`).classList.remove("show-chips");
-});
-$("actions").addEventListener("focusout", e => {
-  const m = e.target.id.match(/^in-(\d)$/); if (!m) return;
-  $(`field-${m[1]}`).classList.remove("focus"); check(+m[1]);
-});
-$("actions").addEventListener("click", e => {
+function setField(i, value) {
+  $(`in-${i}`).value = value; L()[FIELDS[i][0]] = value; changed();
+  clearTimeout(checkTimers[i]); checkTimers[i] = setTimeout(() => { check(i); if (i < 2) refreshPair(); if (i > 2) renderTapCount(); }, 120);
+}
+function renderTapCount() { const set = [3, 4].filter(i => L()[FIELDS[i][0]].trim()).length; $("tap-count").hidden = !set; $("tap-count").textContent = `${set} set`; }
+const fieldOf = el => { const m = el.id && el.id.match(/^in-(\d)$/); return m ? +m[1] : null; };
+const page = $("page-layer");
+page.addEventListener("input", e => { const i = fieldOf(e.target); if (i === null) return; setField(i, e.target.value); suggest(i); });
+page.addEventListener("focusin", e => { const i = fieldOf(e.target); if (i === null) return; $(`field-${i}`).classList.add("focus"); $(`field-${i}`).classList.remove("show-chips"); });
+page.addEventListener("focusout", e => { const i = fieldOf(e.target); if (i === null) return; $(`field-${i}`).classList.remove("focus"); $(`sug-${i}`).hidden = true; check(i); });
+page.addEventListener("click", e => {
   const chips = e.target.closest(".chips");
   if (chips) { $(`in-${chips.id.split("-")[1]}`).focus(); return; }
   const fix = e.target.closest(".fix");
-  if (fix) {
-    const i = +fix.dataset.i, input = $(`in-${i}`);
-    input.value = input.value.replace(fix.dataset.step, fix.dataset.fix);
-    L()[FIELDS[i][0]] = input.value; changed(); check(i); if (i < 2) refreshPair();
-    return;
-  }
+  if (fix) { const i = +fix.dataset.i; setField(i, $(`in-${i}`).value.replace(fix.dataset.step, fix.dataset.fix)); return; }
   const rec = e.target.closest(".rec");
   if (rec) { const i = +rec.id.split("-")[1]; S.recording === i ? stopRecording() : startRecording(i); }
 });
 
+// --- name suggestions while typing (for the step being typed: after the last ", ") ---
+let sugIndex = 0;
+function candidates(step) {
+  const plus = step.lastIndexOf("+");
+  const head = plus >= 0 ? step.slice(0, plus + 1).replace(/\s*$/, " ") : "";
+  const tail = (plus >= 0 ? step.slice(plus + 1) : step).trim().toLowerCase();
+  const apps = S.apps.flatMap(a => [`${cap(a)} Volume +`, `${cap(a)} Volume -`, `${cap(a)} Mute`]);
+  const pool = head ? [...KEYS, ...S.functions.filter(f => f !== "Double Click")]
+                    : [...S.functions, ...KEYS.filter(k => k.length > 1), ...MODS.map(m => `${m} + `), ...apps];
+  if (!tail && !head) return [];
+  const starts = pool.filter(c => c.toLowerCase().startsWith(tail));
+  const contains = pool.filter(c => !starts.includes(c) && tail && c.toLowerCase().includes(tail));
+  return [...starts, ...contains].slice(0, 8).map(c => head + c);
+}
+function suggest(i) {
+  const input = $(`in-${i}`), box = $(`sug-${i}`);
+  const v = input.value, cut = v.lastIndexOf(", ");
+  const step = cut >= 0 ? v.slice(cut + 2) : v;
+  const list = candidates(step).filter(c => c.toLowerCase() !== step.trim().toLowerCase());
+  if (!list.length || S.recording !== null) { box.hidden = true; return; }
+  sugIndex = 0;
+  box.innerHTML = list.map((c, k) => `<button data-v="${esc(c)}" class="${k === 0 ? "hl" : ""}"><span>${esc(c)}</span>${S.functions.includes(c.replace(/^.*\+ /, "")) ? "<small>function</small>" : ""}</button>`).join("");
+  box.hidden = false;
+}
+function acceptSuggestion(i, value) {
+  const v = $(`in-${i}`).value, cut = v.lastIndexOf(", ");
+  setField(i, (cut >= 0 ? v.slice(0, cut + 2) : "") + value);
+  $(`sug-${i}`).hidden = true;
+  if (value.endsWith("+ ")) suggest(i);           // a modifier: keep suggesting the key
+}
+page.addEventListener("mousedown", e => {        // mousedown so the input keeps focus
+  const b = e.target.closest(".suggest button"); if (!b) return;
+  e.preventDefault(); acceptSuggestion(+b.closest(".suggest").id.split("-")[1], b.dataset.v);
+});
+page.addEventListener("keydown", e => {
+  const i = fieldOf(e.target); if (i === null) return;
+  const box = $(`sug-${i}`); if (box.hidden) return;
+  const items = [...box.querySelectorAll("button")];
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault(); sugIndex = (sugIndex + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+    items.forEach((b, k) => b.classList.toggle("hl", k === sugIndex)); items[sugIndex].scrollIntoView({ block: "nearest" });
+  } else if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); acceptSuggestion(i, items[sugIndex].dataset.v); }
+  else if (e.key === "Escape") { box.hidden = true; }
+});
+
+// --- recording ---
 async function startRecording(i) {
   stopRecording();
   const r = await call("record", { field: i });
@@ -461,7 +655,7 @@ async function startRecording(i) {
   const input = $(`in-${i}`);
   input.dataset.prev = input.value; input.value = ""; input.placeholder = "Press a shortcut…  (Esc to cancel)";
   $(`field-${i}`).classList.add("recording"); $(`field-${i}`).classList.remove("show-chips", "bad");
-  $(`rec-${i}`).classList.add("on");
+  $(`rec-${i}`).classList.add("on"); $(`sug-${i}`).hidden = true;
 }
 function stopRecording(restore = true) {
   if (S.recording === null) return;
@@ -477,11 +671,11 @@ function stopRecording(restore = true) {
 }
 handlers.recorded = ({ field, text }) => {
   if (S.recording !== field) return;
-  const input = $(`in-${field}`); input.dataset.prev = text; stopRecording();
-  input.value = text; L()[FIELDS[field][0]] = text; changed(); check(field); if (field < 2) refreshPair();
+  $(`in-${field}`).dataset.prev = text; stopRecording(); setField(field, text);
 };
 handlers.record_cancel = ({ field, reason }) => { if (S.recording === field) stopRecording(); if (reason) toast(reason, true); };
 
+// --- feel + apps ---
 function renderFeel() {
   const l = L();
   $("speed").value = Math.min(5, Math.max(0.25, l.speed));
@@ -502,10 +696,9 @@ function renderApps() {
 function addApp() {
   let v = $("app-input").value.trim().toLowerCase();
   v = v.startsWith("title:") ? "title:" + v.slice(6).trim() : v.replace(/\.exe$/, "");
-  if (v === "title:") return;
-  if (!v) return;
+  if (!v || v === "title:") return;
   const owner = S.cfg.layers.findIndex((l, i) => i !== S.sel && l.apps.includes(v));
-  if (owner >= 0) { toast(`‘${v}’ already switches to ‘${S.cfg.layers[owner].name}’`, true); return; }
+  if (owner >= 0) { toast(`‘${appLabel(v)}’ already switches to ‘${S.cfg.layers[owner].name}’`, true); return; }
   if (!L().apps.includes(v)) L().apps.push(v);
   $("app-input").value = ""; renderApps(); renderSidebar(); changed();
 }
@@ -516,58 +709,45 @@ $("app-chips").addEventListener("click", e => {
   L().apps.splice(+b.dataset.i, 1); renderApps(); renderSidebar(); changed();
 });
 
+// --- layer header: name, enabled, "more" menu ---
 function renderLayer() {
   const l = L();
   $("layer-name").value = l.name;
   $("layer-enabled").checked = l.enabled;
-  $("move-up").disabled = S.sel === 0;
-  $("move-down").disabled = S.sel === S.cfg.layers.length - 1;
-  $("delete").disabled = S.cfg.layers.length === 1;
-  renderTiles(S.pairOf[S.sel]?.index ?? 0);
-  renderActions(); renderFeel(); renderApps(); refreshPair();
+  S.tapOpen = S.tapOpen || [3, 4].some(i => l[FIELDS[i][0]].trim());
+  renderPicker(); renderActions(); renderFeel(); renderApps(); refreshPair();
 }
 $("layer-name").addEventListener("input", e => { L().name = e.target.value; renderSidebar(); changed(); });
 $("layer-enabled").addEventListener("change", e => { L().enabled = e.target.checked; renderSidebar(); changed(); });
-function moveLayer(d) {
-  const ls = S.cfg.layers, j = S.sel + d; if (j < 0 || j >= ls.length) return;
-  [ls[S.sel], ls[j]] = [ls[j], ls[S.sel]]; [S.pairOf[S.sel], S.pairOf[j]] = [S.pairOf[j], S.pairOf[S.sel]];
-  S.sel = j; render(); changed();
-}
-$("move-up").addEventListener("click", () => moveLayer(-1));
-$("move-down").addEventListener("click", () => moveLayer(1));
-$("delete").addEventListener("click", () => {
-  if (S.cfg.layers.length === 1 || !confirm(`Delete the layer ‘${L().name}’?`)) return;
+$("more").addEventListener("click", e => {
+  e.stopPropagation();
+  $("move-up").disabled = S.sel === 0;
+  $("move-down").disabled = S.sel === S.cfg.layers.length - 1;
+  $("delete").disabled = S.cfg.layers.length === 1;
+  $("more-menu").hidden = !$("more-menu").hidden;
+});
+document.addEventListener("click", e => { if (!e.target.closest("#more-menu")) $("more-menu").hidden = true; });
+$("move-up").addEventListener("click", () => moveLayer(S.sel, S.sel - 1));
+$("move-down").addEventListener("click", () => moveLayer(S.sel, S.sel + 1));
+$("delete").addEventListener("click", async () => {
+  if (S.cfg.layers.length === 1) return;
+  const v = await ask(`Delete ‘${L().name}’?`, "The layer is removed when you save. Revert brings it back until then.", [["Cancel", "no"], ["Delete", "yes", "accent"]]);
+  if (v !== "yes") return;
   S.cfg.layers.splice(S.sel, 1); S.pairOf.splice(S.sel, 1); S.sel = Math.min(S.sel, S.cfg.layers.length - 1); render(); changed();
 });
-// "New layer": blank, or a ready-made template (apps already used by another layer are left off)
-const TEMPLATE_ICONS = {
-  Discord: '<path d="M7 17c-2-1-3-3-3-7l2-4c2-1 4-1 4-1l.5 1h3l.5-1s2 0 4 1l2 4c0 4-1 6-3 7l-1-2"/><circle cx="9.5" cy="12" r="1"/><circle cx="14.5" cy="12" r="1"/>',
-  YouTube: '<rect x="3" y="6" width="18" height="12" rx="4"/><path d="m10.5 9.5 4 2.5-4 2.5z"/>',
-  Spotify: '<circle cx="12" cy="12" r="9"/><path d="M7.5 9.5c3-1 6.5-.7 9 .8M8 12.6c2.5-.7 5.2-.4 7.2.8M8.6 15.5c2-.5 3.9-.3 5.5.6"/>',
-  "Video editing": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4"/>',
-  "VS Code": '<path d="m9 8-5 4 5 4M15 8l5 4-5 4"/>',
-  "Teams call": '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>',
-  "Zoom call": '<rect x="3" y="7" width="12" height="10" rx="2"/><path d="m15 11 6-3v8l-6-3"/>',
-  Photoshop: ICONS.brush,
-  Figma: '<path d="M12 3H9a3 3 0 0 0 0 6h3zM12 9H9a3 3 0 0 0 0 6h3zM12 3h3a3 3 0 0 1 0 6h-3zM12 15H9a3 3 0 1 0 3 3zM15 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/>',
-  Excel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14h18M9 4v16"/>',
-};
-function renderAddMenu() {
-  const blank = `<button data-t="-1">${svg('<path d="M12 5v14M5 12h14"/>')}<div><b>Blank layer</b><small>Start from scratch</small></div></button>`;
-  $("add-menu").innerHTML = blank + S.templates.map((t, i) =>
-    `<button data-t="${i}">${svg(TEMPLATE_ICONS[t.layer.name] || ICONS.custom)}<div><b>${esc(t.layer.name)}</b><small>${esc(t.desc)}</small></div></button>`).join("");
+
+// --- new layer: template gallery ---
+function renderGallery() {
+  const blank = `<button class="tcard" data-t="-1"><div class="ticon">${svg('<path d="M12 5v14M5 12h14"/>')}</div><div><b>Blank layer</b><small>Start from scratch</small></div></button>`;
+  $("gallery-grid").innerHTML = blank + S.templates.map((t, i) =>
+    `<button class="tcard" data-t="${i}"><div class="ticon">${svg(TEMPLATE_ICONS[t.layer.name] || ICONS.custom)}</div><div><b>${esc(t.layer.name)}</b><small>${esc(t.desc)}</small></div></button>`).join("");
 }
-$("add-layer").addEventListener("click", e => {
-  e.stopPropagation();
-  const m = $("add-menu"), b = $("add-layer");
-  m.style.top = `${b.offsetTop + b.offsetHeight + 4}px`;
-  m.style.maxHeight = `${window.innerHeight - (b.getBoundingClientRect().bottom + 4) - 12}px`;   // scroll rather than run off the window
-  m.hidden = !m.hidden;
-});
-document.addEventListener("click", e => { if (!e.target.closest("#add-menu")) $("add-menu").hidden = true; });
-$("add-menu").addEventListener("click", e => {
-  const b = e.target.closest("button"); if (!b) return;
-  $("add-menu").hidden = true;
+$("add-layer").addEventListener("click", () => { $("gallery").hidden = false; $("gallery-grid").querySelector(".tcard")?.focus(); });
+$("gallery-cancel").addEventListener("click", () => { $("gallery").hidden = true; });
+$("gallery").addEventListener("click", e => { if (e.target === $("gallery")) $("gallery").hidden = true; });
+$("gallery-grid").addEventListener("click", e => {
+  const b = e.target.closest(".tcard"); if (!b) return;
+  $("gallery").hidden = true;
   const t = +b.dataset.t;
   const layer = t < 0
     ? { name: "New layer", enabled: true, clockwise: "", counter_clockwise: "", press: "", shift_clockwise: "",
@@ -576,7 +756,7 @@ $("add-menu").addEventListener("click", e => {
   const taken = layer.apps.filter(a => S.cfg.layers.some(l => l.apps.includes(a)));
   layer.apps = layer.apps.filter(a => !taken.includes(a));
   S.cfg.layers.push(layer);
-  stopRecording(); S.sel = S.cfg.layers.length - 1; S.page = "layer"; render(); changed();
+  stopRecording(); S.sel = S.cfg.layers.length - 1; S.page = "layer"; S.tapOpen = false; render(); changed();
   if (taken.length) toast(`Left off ${taken.map(appLabel).join(", ")}: another layer already switches on it`, true);
   if (t < 0) { $("layer-name").focus(); $("layer-name").select(); }
 });
@@ -593,7 +773,7 @@ $("window").addEventListener("input", e => { S.cfg.double_tap_ms = +e.target.val
 $("nav-general").addEventListener("click", () => { stopRecording(); S.page = "general"; render(); });
 $("import").addEventListener("click", async () => {
   const r = await call("import");
-  if (r.config) { S.cfg = r.config; S.sel = 0; S.pairOf = []; render(); changed(); toast("Imported. Press Save to keep it."); }
+  if (r.config) { S.cfg = r.config; S.sel = 0; S.pairOf = []; render(); changed(); refreshAllPairs(); toast("Imported. Press Save to keep it."); }
   else if (r.error) toast(r.error, true);
 });
 $("export").addEventListener("click", async () => {
@@ -601,16 +781,29 @@ $("export").addEventListener("click", async () => {
   if (r.ok) toast("Exported"); else if (r.error) toast(r.error, true);
 });
 
-// --- save / revert ---
+// --- save / revert / close ---
 async function save() {
-  if ($("save").disabled) return;
+  if (!isDirty()) return true;
   const r = await call("save", { config: S.cfg });
-  if (r.ok) { S.saved = JSON.stringify(S.cfg); changed(); toast("✓  Saved"); }
-  else toast(r.error || "Couldn't save", true);
+  if (r.ok) { S.saved = JSON.stringify(S.cfg); changed(); toast("✓  Saved"); return true; }
+  toast(r.error || "Couldn't save", true); return false;
 }
 $("save").addEventListener("click", save);
-$("revert").addEventListener("click", () => { stopRecording(); S.cfg = JSON.parse(S.saved); S.sel = Math.min(S.sel, S.cfg.layers.length - 1); S.pairOf = []; render(); changed(); });
-document.addEventListener("keydown", e => { if (e.ctrlKey && e.key.toLowerCase() === "s") { e.preventDefault(); save(); } });
+$("revert").addEventListener("click", () => { stopRecording(); S.cfg = JSON.parse(S.saved); S.sel = Math.min(S.sel, S.cfg.layers.length - 1); S.pairOf = []; render(); changed(); refreshAllPairs(); });
+handlers.close_request = async () => {
+  if ($("confirm").hidden === false) return;                       // already asking
+  if (isDirty()) {
+    const v = await ask("Save your changes?", "You have unsaved changes in your layers.", [["Cancel", "cancel"], ["Don’t save", "discard"], ["Save", "save", "accent"]]);
+    if (v === null || v === "cancel") return;
+    if (v === "save" && !(await save())) return;                   // stay open if saving failed
+  }
+  stopRecording(); call("close");
+};
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey && e.key.toLowerCase() === "s") { e.preventDefault(); save(); }
+  if (e.key === "Escape" && !$("gallery").hidden) $("gallery").hidden = true;
+  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "l") document.documentElement.classList.toggle("dark");   // preview the other theme
+});
 
 function render() {
   $("page-layer").hidden = S.page !== "layer";
@@ -623,12 +816,10 @@ function render() {
   const d = await call("init");
   document.documentElement.classList.toggle("dark", d.dark);
   document.documentElement.style.setProperty("--accent", d.accent);
-  S.cfg = d.config; S.saved = JSON.stringify(d.config); S.sel = Math.min(d.current, d.config.layers.length - 1);
-  S.pairs = d.pairs; S.functions = d.functions; S.templates = d.templates;
-  renderAddMenu();
+  S.cfg = d.config; S.saved = JSON.stringify(d.config); S.sel = Math.min(d.current, d.config.layers.length - 1); S.active = d.current;
+  S.pairs = d.pairs; S.functions = d.functions; S.templates = d.templates; S.apps = d.apps;
   $("running").innerHTML = d.apps.map(a => `<option value="${esc(a)}">`).join("");
-  render(); changed();
-  S.cfg.layers.forEach((_, i) => { if (i !== S.sel) refreshPair(i); });
+  renderGallery(); render(); changed(); refreshAllPairs();
 })();
 </script>
 </body>

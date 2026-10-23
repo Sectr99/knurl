@@ -40,6 +40,33 @@ impl HasWindowHandle for Hwnd {
 #[derive(Default)]
 pub struct Web { view: RefCell<Option<wry::WebView>>, inbox: Rc<RefCell<VecDeque<String>>> }
 
+// --- window size and position, kept in %APPDATA%\RotaryKnob\window.txt as "left top right bottom maximized" ---
+
+fn placement_path() -> std::path::PathBuf { config::path().with_file_name("window.txt") }
+
+fn save_placement(hwnd: isize) {
+    let mut wp: WINDOWPLACEMENT = unsafe { std::mem::zeroed() };
+    wp.length = std::mem::size_of::<WINDOWPLACEMENT>() as u32;
+    if unsafe { GetWindowPlacement(hwnd, &mut wp) } == 0 || unsafe { IsWindowVisible(hwnd) } == 0 { return; }
+    let r = wp.rcNormalPosition;
+    let _ = std::fs::write(placement_path(), format!("{} {} {} {} {}", r.left, r.top, r.right, r.bottom, (wp.showCmd == SW_SHOWMAXIMIZED as u32) as u8));
+}
+
+/// Shows the window where it was last time, if that spot is still on a monitor.
+fn restore_placement(hwnd: isize) {
+    let Ok(text) = std::fs::read_to_string(placement_path()) else { return };
+    let v: Vec<i32> = text.split_whitespace().filter_map(|n| n.parse().ok()).collect();
+    let [left, top, right, bottom, max] = v[..] else { return };
+    let rc = windows_sys::Win32::Foundation::RECT { left, top, right, bottom };
+    let on_screen = unsafe { windows_sys::Win32::Graphics::Gdi::MonitorFromRect(&rc, windows_sys::Win32::Graphics::Gdi::MONITOR_DEFAULTTONULL) } != 0;
+    if !on_screen || right - left < 400 || bottom - top < 300 { return; }
+    let mut wp: WINDOWPLACEMENT = unsafe { std::mem::zeroed() };
+    wp.length = std::mem::size_of::<WINDOWPLACEMENT>() as u32;
+    wp.rcNormalPosition = rc;
+    wp.showCmd = if max == 1 { SW_SHOWMAXIMIZED as u32 } else { SW_SHOWNORMAL as u32 };
+    unsafe { SetWindowPlacement(hwnd, &wp) };
+}
+
 // --- key recorder: a low-level keyboard hook swallows the next non-modifier key and reports it ---
 
 static HOOK: AtomicIsize = AtomicIsize::new(0);
@@ -94,13 +121,20 @@ impl App {
                 }
             }
         }
+        if !win.visible() { restore_placement(hwnd); }
         win.set_visible(true);
         win.set_focus();
         if let Some(v) = self.web.view.borrow().as_ref() { let _ = v.focus(); }
     }
 
-    /// Window closed: free the web view entirely.
+    /// The window's close button: let the page offer to save unsaved changes (it answers with "close").
+    pub fn request_close(&self) {
+        if self.web.view.borrow().is_some() { self.event("close_request", json!({})); } else { self.close_settings(); }
+    }
+
+    /// Close for real: remember the window's size and position, free the web view entirely.
     pub fn close_settings(&self) {
+        save_placement(App::hwnd(&self.ui.web.win.handle));
         stop_hook();
         self.state.borrow_mut().recording = None;
         self.web.inbox.borrow_mut().clear();
@@ -108,11 +142,16 @@ impl App {
         self.ui.web.win.set_visible(false);
     }
 
+    /// Tell an open settings page which layer the knob is on now.
+    pub fn notify_active(&self) {
+        if self.web.view.borrow().is_some() { self.event("active", json!({"index": self.state.borrow().knob.layer})); }
+    }
+
     fn send(&self, js: String) {
         if let Some(v) = self.web.view.borrow().as_ref() { let _ = v.evaluate_script(&js); }
     }
     fn reply(&self, id: &Value, data: Value) { self.send(format!("knob.reply({id},{data})")); }
-    fn event(&self, name: &str, data: Value) { self.send(format!("knob.event({},{data})", json!(name))); }
+    pub(crate) fn event(&self, name: &str, data: Value) { self.send(format!("knob.event({},{data})", json!(name))); }
 
     /// Drain messages from the page (posted to the message window as WM_WEB).
     pub fn on_web_message(&self) {
