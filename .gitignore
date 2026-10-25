@@ -3,7 +3,9 @@
 # Rust build output
 target/
 
-# Notes and handoff docs from working on the project
+# AI/working notes (CLAUDE.md + notes/) stay local
+CLAUDE.md
+notes/
 HANDOFF.md
 
 # Device research, probes, the vendor's apps and the Python prototype
