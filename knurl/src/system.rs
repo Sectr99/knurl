@@ -108,15 +108,16 @@ pub fn battery() -> Option<Battery> {
 
 // --- the knob's own key mapping (vendor HID protocol, see remap.py) ---
 
-/// Map the knob to F13 (counter-clockwise), F14 (press), F15 (clockwise). USB only.
+/// Map the knob to F13 (counter-clockwise), F14 (press), F15 (clockwise), F16/F17 (turned while held). USB only.
 pub fn setup_knob() -> Result<(), String> {
     let api = hidapi::HidApi::new().map_err(|e| e.to_string())?;
     let info = api.device_list()
         .find(|d| d.vendor_id() == KNOB_VID && d.product_id() == KNOB_PID && d.usage_page() == 0xFF00)
         .ok_or("Knob not found on USB. Plug it in with the cable and try again.")?;
     let dev = info.open_device(&api).map_err(|e| e.to_string())?;
-    // 03 FD <key> 01 01 00 01 00 32 <HID code> 00: key 2 = counter-clockwise, 3 = press, 4 = clockwise
-    for (key, code) in [(2u8, 0x68u8), (3, 0x69), (4, 0x6A)] {
+    // 03 FD <key> 01 01 00 01 00 32 <HID code> 00: key 2 = counter-clockwise, 3 = press, 4 = clockwise,
+    // 5 / 6 = counter-clockwise / clockwise while held (factory: screen brightness). F13-F17 = 0x68-0x6C.
+    for (key, code) in [(2u8, 0x68u8), (3, 0x69), (4, 0x6A), (5, 0x6B), (6, 0x6C)] {
         let mut p = [0u8; 65];
         p[..11].copy_from_slice(&[0x03, 0xFD, key, 0x01, 0x01, 0x00, 0x01, 0x00, 0x32, code, 0x00]);
         dev.write(&p).map_err(|e| format!("write failed: {e}"))?;

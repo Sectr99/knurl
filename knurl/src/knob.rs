@@ -1,6 +1,7 @@
-//! Knob gestures. The knob sends F13 (counter-clockwise), F15 (clockwise) and F14 (press); the firmware reports
-//! every press as an instant tap, so there is no hold. Taps are counted within a window to switch layer, and a
-//! tap followed by a turn gives the "shifted" turn actions.
+//! Knob gestures. The knob sends F13 (counter-clockwise), F15 (clockwise) and F14 (press), and F16/F17 when it's
+//! turned while held down; the firmware reports every press as an instant tap, so a plain hold isn't seen. Taps
+//! are counted within a window to switch layer; a tap followed by a turn, or a turn while held, gives the
+//! "shifted" turn actions.
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Clone, Copy, Default, Serialize, Deserialize)]
@@ -8,7 +9,7 @@ use serde::{Deserialize, Serialize};
 pub enum Gesture { #[default] DoubleTap, TripleTap, TrayOnly }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum Input { Cw, Ccw, Press }
+pub enum Input { Cw, Ccw, Press, HeldCw, HeldCcw }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Output { Turn(i32), ShiftTurn(i32), Press, NextLayer }
@@ -27,7 +28,12 @@ pub struct Knob {
 impl Knob {
     /// An empty result after a press means "wait": call `timeout()` once `window_ms` passes without another tap.
     pub fn feed(&mut self, input: Input, now: u64, c: &Ctx) -> Vec<Output> {
-        let dir = match input { Input::Cw => 1, Input::Ccw => -1, Input::Press => 0 };
+        let dir = match input { Input::Cw | Input::HeldCw => 1, Input::Ccw | Input::HeldCcw => -1, Input::Press => 0 };
+        if matches!(input, Input::HeldCw | Input::HeldCcw) {      // held: shifted if the layer has those, else a plain turn
+            self.taps = 0;
+            self.shift_until = None;
+            return vec![if c.has_shift { Output::ShiftTurn(dir) } else { Output::Turn(dir) }];
+        }
         if dir != 0 {
             let tapped = self.taps > 0 && now - self.last_tap <= c.window_ms;
             if c.has_shift && (tapped || self.shift_until.is_some_and(|u| now <= u)) {
@@ -73,6 +79,15 @@ impl Pace {
 mod tests {
     use super::*;
     const D: Ctx = Ctx { window_ms: 350, gesture: Gesture::DoubleTap, has_shift: false };
+
+    #[test]
+    fn held_turn_is_shifted_or_plain() {
+        let mut k = Knob::default();
+        assert_eq!(k.feed(Input::HeldCw, 0, &D), vec![Output::Turn(1)]);
+        let s = Ctx { has_shift: true, ..D };
+        assert_eq!(k.feed(Input::HeldCcw, 10, &s), vec![Output::ShiftTurn(-1)]);
+        assert_eq!(k.feed(Input::Cw, 20, &s), vec![Output::Turn(1)]);   // letting go ends it
+    }
 
     #[test]
     fn double_tap() {

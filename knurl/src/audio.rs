@@ -10,24 +10,44 @@ use windows::core::Interface;
 /// Once at startup, on the UI thread (WebView2 needs the same single-threaded apartment).
 pub fn init() { unsafe { let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok(); } }
 
-/// Every mixer session belonging to `app` (e.g. "discord"), across all active output devices.
-fn sessions(app: &str) -> Vec<ISimpleAudioVolume> {
-    let mut found = vec![];
+/// Calls `f(program, session)` for every program's mixer session (system sounds skipped), on all active outputs.
+fn each_session(mut f: impl FnMut(&str, &IAudioSessionControl)) {
     unsafe {
-        let Ok(en) = CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL) else { return found };
-        let Ok(devices) = en.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE) else { return found };
+        let Ok(en) = CoCreateInstance::<_, IMMDeviceEnumerator>(&MMDeviceEnumerator, None, CLSCTX_ALL) else { return };
+        let Ok(devices) = en.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE) else { return };
         for d in 0..devices.GetCount().unwrap_or(0) {
             let Ok(mgr) = devices.Item(d).and_then(|dev| dev.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None)) else { continue };
             let Ok(list) = mgr.GetSessionEnumerator() else { continue };
             for i in 0..list.GetCount().unwrap_or(0) {
                 let Ok(ctl) = list.GetSession(i) else { continue };
                 let pid = ctl.cast::<IAudioSessionControl2>().and_then(|c| c.GetProcessId()).unwrap_or(0);
-                if pid == 0 || apps::exe_of_pid(pid).as_deref() != Some(app) { continue; }
-                if let Ok(v) = ctl.cast::<ISimpleAudioVolume>() { found.push(v); }
+                if pid == 0 { continue; }
+                if let Some(exe) = apps::exe_of_pid(pid) { f(&exe, &ctl); }
             }
         }
     }
+}
+
+/// Every mixer session belonging to `app` (e.g. "discord"), across all active output devices.
+fn sessions(app: &str) -> Vec<ISimpleAudioVolume> {
+    let mut found = vec![];
+    each_session(|exe, ctl| if exe == app { if let Ok(v) = ctl.cast::<ISimpleAudioVolume>() { found.push(v); } });
     found
+}
+
+/// The program "Media Volume" controls: the one behind Windows' current media session (what the media keys
+/// play/pause), else whatever is making sound right now (some players' session ids don't name the program).
+pub fn media_app() -> Option<String> {
+    use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager as Media;
+    let id = (|| -> windows::core::Result<String> {
+        Ok(Media::RequestAsync()?.join()?.GetCurrentSession()?.SourceAppUserModelId()?.to_string())
+    })().unwrap_or_default();
+    // "Spotify.exe" for desktop programs, "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify" for Store apps
+    let name = id.rsplit('!').next().unwrap_or("").to_lowercase().trim_end_matches(".exe").to_string();
+    if !name.is_empty() && !sessions(&name).is_empty() { return Some(name); }
+    let mut playing = None;
+    each_session(|exe, ctl| if playing.is_none() && unsafe { ctl.GetState() } == Ok(AudioSessionStateActive) { playing = Some(exe.to_string()); });
+    playing
 }
 
 /// Nudge `app`'s volume by `delta` (0.05 = 5 points), or toggle its mute. All its sessions are set to the same

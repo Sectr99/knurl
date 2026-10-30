@@ -1,347 +1,236 @@
 <!doctype html>
-<html>
+<html data-theme="__THEME__">
 <head>
 <meta charset="utf-8">
 <title>Knurl settings</title>
 <style>
-  /*ASSETS*/
-  /* Material 3 colour roles, blue scheme to match the app icon (Material Theme Builder baseline). */
-  :root {
-    --primary: #0061a4; --on-primary: #fff; --primary-container: #d1e4ff; --on-primary-container: #001d36;
-    --secondary-container: #d7e3f7; --on-secondary-container: #101c2b;
-    --surface: #f8f9ff; --surface-low: #f2f3fa; --surface-c: #eceef4; --surface-high: #e6e8ee; --surface-highest: #e1e2e8;
-    --on-surface: #191c20; --on-surface-var: #43474e; --outline: #73777f; --outline-var: #c3c6cf;
-    --error: #ba1a1a; --error-container: #ffdad6; --on-error-container: #410002;
-    --inverse-surface: #2e3035; --inverse-on-surface: #eff0f7; --scrim: rgba(0,0,0,.32);
-    --elev1: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.15);
-    --elev3: 0 1px 3px rgba(0,0,0,.3), 0 4px 8px 3px rgba(0,0,0,.15);
-    --check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'%3E%3Cpath d='m382-354 339-339q12-12 28-12t28 12q12 12 12 28.5T777-636L410-268q-12 12-28 12t-28-12L182-440q-12-12-11.5-28.5T183-497q12-12 28.5-12t28.5 12l142 143Z'/%3E%3C/svg%3E");
-  }
-  html.dark {
-    --primary: #9ecaff; --on-primary: #003258; --primary-container: #00497d; --on-primary-container: #d1e4ff;
-    --secondary-container: #3b4858; --on-secondary-container: #d7e3f7;
-    --surface: #111318; --surface-low: #191c20; --surface-c: #1d2024; --surface-high: #282a2f; --surface-highest: #33353a;
-    --on-surface: #e2e2e9; --on-surface-var: #c3c6cf; --outline: #8d9199; --outline-var: #43474e;
-    --error: #ffb4ab; --error-container: #93000a; --on-error-container: #ffdad6;
-    --inverse-surface: #e2e2e9; --inverse-on-surface: #2e3035; --scrim: rgba(0,0,0,.5);
-  }
-  [hidden] { display: none !important; }
+/*BENCH*/
+/*ASSETS*/
+  /* Knurl on Bench: layout only. Colours, type, radius and density come from bench.css (--b-* and tokens). */
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
-  body { font: 14px/20px Roboto, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; letter-spacing: .01em; color: var(--on-surface);
-         background: var(--surface); user-select: none; -webkit-font-smoothing: antialiased; }
-  button, input { font: inherit; color: inherit; letter-spacing: inherit; }
-  button { cursor: pointer; }
-  :focus { outline: none; }
-  :focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-  svg { width: 20px; height: 20px; fill: currentColor; flex: none; }
+  body { background: var(--surface-window); color: var(--ink); font: var(--b-fs)/1.45 var(--b-font); user-select: none; overflow: hidden; }
+  button, input, select { font: inherit; color: inherit; }
+  [hidden] { display: none !important; }
+  .i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .grow { flex: 1; min-width: 0; }
 
-  .app { display: grid; grid-template-columns: 280px 1fr; grid-template-rows: 1fr auto; grid-template-areas: "side main" "side bar"; height: 100vh; }
+  /* window regions: sidebar, toolbar, content, inspector */
+  .app { display: grid; height: 100vh; grid-template-columns: 190px minmax(0, 1fr) 250px; grid-template-rows: auto minmax(0, 1fr);
+         grid-template-areas: "side bar bar" "side main insp"; }
+  .app.general { grid-template-areas: "side bar bar" "side main main"; }
+  .app.general .insp { display: none; }
 
-  /* --- navigation drawer --- */
-  .side { grid-area: side; background: var(--surface-low); display: flex; flex-direction: column; padding: 16px 12px 12px; gap: 4px; min-height: 0; }
-  .brand { display: flex; align-items: center; gap: 12px; padding: 4px 12px 16px; }
-  .brand .logo { width: 40px; height: 40px; background-size: cover; flex: none; }
-  .brand b { display: block; font-size: 22px; line-height: 28px; font-weight: 400; }
-  .brand span { font-size: 12px; line-height: 16px; color: var(--on-surface-var); letter-spacing: .03em; }
-  .fab { display: inline-flex; align-items: center; gap: 12px; height: 56px; padding: 0 20px 0 16px; margin: 0 4px 12px; align-self: flex-start; border: 0; border-radius: 16px;
-         background: var(--primary-container); color: var(--on-primary-container); font-weight: 500; box-shadow: var(--elev1); transition: box-shadow .2s, background-color .15s; }
-  .fab svg { width: 24px; height: 24px; }
-  .fab:hover { box-shadow: var(--elev3); background: color-mix(in srgb, var(--on-primary-container) 8%, var(--primary-container)); }
-  .label { font-size: 14px; font-weight: 500; color: var(--on-surface-var); padding: 8px 16px; letter-spacing: .01em; }
-  #layers { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; padding: 2px; }
-  .layer { text-align: left; border: 0; background: transparent; border-radius: 16px; padding: 10px 16px; position: relative; transition: background-color .15s; color: var(--on-surface-var); }
-  .layer:hover { background: color-mix(in srgb, var(--on-surface) 8%, transparent); }
-  .layer.sel { background: var(--secondary-container); color: var(--on-secondary-container); }
-  .layer.off { opacity: .5; }
+  /* sidebar: Bench NavList on surface-chrome */
+  .side { grid-area: side; display: flex; flex-direction: column; gap: 2px; padding: var(--b-pad); background: var(--surface-chrome); border-right: 1px solid var(--border); min-height: 0; }
+  .brand { display: flex; align-items: center; gap: 9px; padding: 4px 10px 8px; }
+  .brand .logo { width: 20px; height: 20px; background-size: cover; flex: none; }
+  .brand b { font-weight: 600; text-transform: var(--b-h-case); letter-spacing: var(--b-h-track); }
+  .b-nav__group { display: flex; justify-content: space-between; }
+  #layers { display: grid; gap: 2px; overflow-y: auto; min-height: 0; align-content: start; }
+  .b-nav__item { border: 0; background: transparent; width: 100%; text-align: left; cursor: pointer; }
+  .b-nav__item .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .b-nav__item .b-num { color: var(--ink-muted); font-size: .9em; }
+  .b-nav__item[aria-current="page"] .b-num { color: inherit; }
+  .b-nav__item.add { color: var(--ink-muted); }
+  .layer.off .nm { opacity: .55; }
   .layer.dragging { opacity: .4; }
-  .layer.drop-before { box-shadow: inset 0 3px 0 var(--primary); }
-  .layer.drop-after { box-shadow: inset 0 -3px 0 var(--primary); }
-  .layer .name { font-weight: 500; display: flex; align-items: center; gap: 8px; color: var(--on-surface); }
-  .layer.sel .name { color: var(--on-secondary-container); }
-  .layer .name span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .live { font-size: 11px; line-height: 16px; font-weight: 500; color: var(--on-primary); background: var(--primary); border-radius: 8px; padding: 0 8px; flex: none; letter-spacing: .04em; }
-  .lnum { font-size: 12px; font-weight: 500; margin-left: auto; flex: none; opacity: .8; }
-  .layer .sum { font-size: 12px; line-height: 16px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .03em; }
-  .layer .apps { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
-  .tag { font-size: 11px; line-height: 16px; font-weight: 500; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--outline-var); }
-  .layer.sel .tag { border-color: color-mix(in srgb, var(--on-secondary-container) 30%, transparent); }
-  .grow { flex: 1; }
-  .side-btn { display: flex; align-items: center; gap: 12px; height: 56px; border: 0; background: transparent; padding: 0 16px; border-radius: 28px; text-align: left; font-weight: 500; color: var(--on-surface-var); transition: background-color .15s; }
-  .side-btn svg { width: 24px; height: 24px; }
-  .side-btn:hover { background: color-mix(in srgb, var(--on-surface) 8%, transparent); }
-  .side-btn.sel { background: var(--secondary-container); color: var(--on-secondary-container); }
+  .layer.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+  .layer.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+  .live { margin-left: auto; font-size: .8em; }
+  .live + .b-num { margin-left: 6px !important; }
+  .b-nav__item[aria-current="page"] .live { color: var(--nav-active-ink); background: color-mix(in srgb, var(--nav-active-ink) 18%, transparent); }
 
-  /* --- main --- */
-  main { grid-area: main; overflow-y: auto; padding: 24px 32px 32px; min-height: 0; }
-  .page { display: flex; flex-direction: column; gap: 16px; max-width: 920px; margin: 0 auto; animation: fade .25s cubic-bezier(.2,0,0,1); }
-  @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-  .title-row { display: flex; align-items: center; gap: 16px; margin-bottom: 4px; position: relative; }
-  .title { flex: 1; font-size: 28px; line-height: 36px; font-weight: 400; border: 0; background: transparent; border-radius: 12px; padding: 4px 12px; margin-left: -12px; min-width: 0; transition: background-color .15s; }
-  .title:hover { background: color-mix(in srgb, var(--on-surface) 6%, transparent); }
-  .title:focus { background: var(--surface-highest); box-shadow: inset 0 -2px 0 var(--primary); border-radius: 12px 12px 0 0; }
-  h1 { font-size: 28px; line-height: 36px; font-weight: 400; margin: 4px 0; }
-  h2 { font-size: 16px; line-height: 24px; font-weight: 500; margin: 0; letter-spacing: .01em; }
-  .muted { color: var(--on-surface-var); font-size: 12px; line-height: 16px; letter-spacing: .03em; }
-  .card { background: var(--surface-c); border-radius: 16px; padding: 16px 24px 20px; }
-  .card-head { display: flex; align-items: center; gap: 16px; min-height: 40px; }
-  .card-head + * { margin-top: 12px; }
-  .card-head .muted { margin-left: auto; text-align: right; }
-  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .icon-btn { width: 40px; height: 40px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 20px; color: var(--on-surface-var); transition: background-color .15s; }
-  .icon-btn svg { width: 24px; height: 24px; }
-  .icon-btn:hover { background: color-mix(in srgb, var(--on-surface-var) 8%, transparent); }
+  /* toolbar: heading left, actions right, primary last */
+  .bar { grid-area: bar; min-height: calc(var(--b-ctl) + var(--b-pad) * 2); }
+  .tool-left { display: flex; align-items: center; gap: var(--space-3); flex: 1; min-width: 0; }
+  .bar > .b-heading { flex: 1; }
+  .title { font-size: var(--b-h-size); font-weight: 600; text-transform: var(--b-h-case); letter-spacing: var(--b-h-track);
+           height: var(--b-ctl); width: 24ch; min-width: 0; padding: 0 8px; margin-left: -9px; border: 1px solid transparent; border-radius: var(--b-r); background: transparent; }
+  .title:hover { border-color: var(--border); }
+  .title:focus { border-color: var(--border-control); background: var(--surface-field); outline: none; }
+  .status { display: flex; align-items: center; gap: 6px; color: var(--ink-muted); }
+  .status.dirty::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--status-warn); }
+  .sw { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--ink-muted); cursor: pointer; }
+  .icon { width: var(--b-ctl); padding: 0; justify-content: center; }
+  .menu-wrap { position: relative; }
+  .pop { position: absolute; z-index: 20; top: calc(100% + 4px); right: 0; }
+  button.b-menu__item { border: 0; background: transparent; width: 100%; text-align: left; cursor: pointer; }
+  .b-menu__item[disabled] { opacity: .45; pointer-events: none; }
 
-  /* menus */
-  .pop { position: absolute; z-index: 20; background: var(--surface-c); border-radius: 4px; box-shadow: var(--elev3);
-         padding: 8px 0; display: flex; flex-direction: column; min-width: 200px; animation: menu .2s cubic-bezier(.2,0,0,1); transform-origin: top; }
-  @keyframes menu { from { opacity: 0; transform: scaleY(.8); } }
-  .pop button { display: flex; align-items: center; gap: 12px; border: 0; background: transparent; height: 48px; padding: 0 16px; text-align: left; color: var(--on-surface); }
-  .pop button svg { color: var(--on-surface-var); width: 24px; height: 24px; }
-  .pop button:hover, .pop button.hl { background: color-mix(in srgb, var(--on-surface) 8%, transparent); }
-  .pop button:disabled { opacity: .38; pointer-events: none; }
-  .pop button.danger, .pop button.danger svg { color: var(--error); }
-  .pop hr { border: 0; border-top: 1px solid var(--outline-var); margin: 8px 0; }
+  /* content */
+  main { grid-area: main; overflow-y: auto; padding: var(--space-5) var(--space-6) var(--space-6); min-height: 0; }
+  .page { display: grid; gap: var(--space-6); max-width: 780px; }
+  .sec-head { display: flex; align-items: baseline; gap: var(--space-3); padding-bottom: var(--space-2); border-bottom: 1px solid var(--border); }
+  .sec-head .b-help { margin-left: auto; text-align: right; }
+  .row { display: flex; align-items: center; gap: var(--space-3); min-height: calc(var(--b-row) + 10px); padding: 5px 0; border-bottom: 1px solid var(--border-soft); }
+  .row > .lbl { width: 150px; flex: none; }
+  .row small { display: block; color: var(--ink-muted); font-size: .92em; }
+  .b-select { min-width: 220px; }
 
-  /* switch (M3: 52x32 track, handle grows and shows a check when on) */
-  .switch { display: inline-flex; align-items: center; gap: 12px; cursor: pointer; }
-  .switch input { appearance: none; width: 52px; height: 32px; border-radius: 16px; border: 2px solid var(--outline); background: var(--surface-highest); position: relative; margin: 0; flex: none; cursor: pointer; transition: background-color .2s, border-color .2s; }
-  .switch input::after { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: var(--outline); top: 6px; left: 6px; transition: all .2s cubic-bezier(.2,0,0,1); }
-  .switch input::before { content: ""; position: absolute; z-index: 1; width: 16px; height: 16px; top: 6px; left: 26px; background: var(--on-primary-container); -webkit-mask: var(--check) center/16px no-repeat; opacity: 0; transition: opacity .2s; }
-  .switch input:checked { background: var(--primary); border-color: var(--primary); }
-  .switch input:checked::after { width: 24px; height: 24px; top: 2px; left: 22px; background: var(--on-primary); }
-  .switch input:checked::before { opacity: 1; }
-  .switch:hover input:not(:checked)::after { background: var(--on-surface-var); }
-  .switch:active input::after { width: 28px; height: 28px; top: 0; }
-  .switch:active input:not(:checked)::after { left: 0; }
-  .switch:active input:checked::after { left: 20px; }
-
-  /* turning picker: tonal menu button, then filter chips */
-  .picker { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px 0 16px; border-radius: 20px; border: 0; background: var(--secondary-container); color: var(--on-secondary-container); font-weight: 500; min-width: 220px; transition: box-shadow .15s; }
-  .picker:hover { box-shadow: var(--elev1); }
-  .picker .chev { margin-left: auto; transition: transform .2s; }
-  .picker.open .chev { transform: rotate(180deg); }
-  .tiles { display: flex; flex-wrap: wrap; gap: 8px; animation: fade .2s cubic-bezier(.2,0,0,1); }
-  .tile { border: 1px solid var(--outline); background: transparent; border-radius: 8px; height: 32px; padding: 0 16px 0 8px; display: flex; align-items: center; gap: 8px; color: var(--on-surface-var); transition: background-color .15s; }
-  .tile svg { width: 18px; height: 18px; color: var(--primary); }
-  .tile span { font-weight: 500; white-space: nowrap; }
-  .tile:hover { background: color-mix(in srgb, var(--on-surface-var) 8%, transparent); }
-  .tile.sel { border-color: transparent; background: var(--secondary-container); color: var(--on-secondary-container); }
-  .tile.sel svg { color: var(--on-secondary-container); }
-
-  /* action rows */
-  .action { display: grid; grid-template-columns: 220px 1fr auto; align-items: start; gap: 16px; padding: 12px 0; border-top: 1px solid var(--outline-var); }
-  .actions > .action:first-child { border-top: 0; }
-  .alabel { display: flex; align-items: center; gap: 12px; min-height: 48px; min-width: 0; }
-  .alabel .glyph { width: 40px; height: 40px; border-radius: 20px; background: var(--secondary-container); display: grid; place-items: center; color: var(--on-secondary-container); flex: none; }
-  .alabel b { font-weight: 500; font-size: 14px; }
-  .alabel small { display: block; color: var(--on-surface-var); font-size: 12px; line-height: 16px; letter-spacing: .03em; }
-  .field { position: relative; min-height: 48px; border-radius: 4px; background: transparent; box-shadow: inset 0 0 0 1px var(--outline); transition: box-shadow .15s; }
-  .field:hover { box-shadow: inset 0 0 0 1px var(--on-surface); }
-  .field input { width: 100%; height: 48px; border: 0; background: transparent; padding: 0 16px; outline: none; font-size: 16px; }
-  .field input::placeholder { color: var(--on-surface-var); opacity: .7; font-size: 14px; }
-  .field .chips { position: absolute; inset: 1px; display: none; align-items: center; gap: 6px; padding: 0 12px; overflow: hidden; white-space: nowrap; cursor: text; background: var(--surface-c); border-radius: 3px; }
+  .action { display: grid; grid-template-columns: 210px minmax(0, 1fr) auto; gap: var(--space-3); align-items: start; padding: 7px 0; border-bottom: 1px solid var(--border-soft); }
+  .alabel { display: flex; gap: var(--space-2); align-items: flex-start; padding-top: 4px; min-width: 0; }
+  .alabel .i { color: var(--ink-muted); margin-top: 2px; }
+  .alabel b { font-weight: 600; }
+  .alabel small { display: block; color: var(--ink-muted); font-size: .92em; }
+  .field { position: relative; height: var(--b-ctl); border-radius: var(--b-r); border: 1px solid var(--border-control); background: var(--surface-field); }
+  .field input { width: 100%; height: 100%; border: 0; background: transparent; padding: 0 10px; outline: none; }
+  .field input::placeholder { color: var(--ink-muted); }
+  .field.focus { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .field .chips { position: absolute; inset: 0; display: none; align-items: center; gap: 4px; padding: 0 5px; overflow: hidden; white-space: nowrap; cursor: text; background: var(--surface-field); border-radius: inherit; }
   .field.show-chips .chips { display: flex; }
   .field.show-chips input { color: transparent; }
-  .field.focus { box-shadow: inset 0 0 0 2px var(--primary); }
-  .field.bad { box-shadow: inset 0 0 0 2px var(--error); }
-  .field.recording { box-shadow: inset 0 0 0 2px var(--primary); animation: pulse 1.2s ease-in-out infinite; }
-  @keyframes pulse { 50% { background: color-mix(in srgb, var(--primary) 10%, transparent); } }
-  .suggest { top: calc(100% + 4px); left: 0; right: 0; max-height: 280px; overflow-y: auto; }
-  .suggest button { justify-content: space-between; height: 40px; }
-  .suggest small { color: var(--on-surface-var); font-size: 12px; }
-  .err { grid-column: 2 / 4; font-size: 12px; line-height: 16px; color: var(--error); display: flex; gap: 8px; align-items: center; margin-top: -8px; padding-left: 16px; letter-spacing: .03em; }
+  .field.bad { border-color: var(--status-bad); }
+  .field.recording { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .suggest { top: calc(100% + 4px); left: 0; right: auto; width: 100%; max-height: 260px; overflow-y: auto; }
+  .suggest small { margin-left: auto; opacity: .75; }
+  .b-menu__item.hl { background: var(--accent); color: var(--on-accent); }
+  .err { grid-column: 2 / 4; display: flex; gap: var(--space-2); align-items: center; margin-top: -3px; }
   .err:empty { display: none; }
-  .fix { border: 1px solid var(--outline); background: transparent; color: var(--primary); border-radius: 8px; height: 28px; padding: 0 12px; font-size: 12px; font-weight: 500; }
-  .fix:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
-  kbd { font: 500 12px/1 Roboto, "Segoe UI", sans-serif; padding: 6px 8px 5px; border-radius: 6px; background: var(--surface-highest); color: var(--on-surface);
-        box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--on-surface) 18%, transparent); min-width: 26px; text-align: center; }
-  .plus { color: var(--on-surface-var); font-size: 12px; }
-  .fn { font-size: 13px; font-weight: 500; height: 28px; padding: 0 12px; border-radius: 8px; background: var(--secondary-container); color: var(--on-secondary-container); display: inline-flex; align-items: center; gap: 6px; }
-  .fn svg { width: 16px; height: 16px; }
-  .arg { font-size: 14px; color: var(--on-surface-var); max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
-  .then { color: var(--on-surface-var); margin: 0 4px; }
-  .rec { height: 40px; margin-top: 4px; display: inline-flex; align-items: center; gap: 8px; padding: 0 16px 0 12px; border-radius: 20px; border: 1px solid var(--outline); background: transparent; color: var(--primary); font-weight: 500; transition: background-color .15s; }
-  .rec svg { width: 18px; height: 18px; }
-  .rec:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
-  .rec.on { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
-  .disclose { display: flex; align-items: center; gap: 12px; width: 100%; border: 0; border-top: 1px solid var(--outline-var); background: transparent; padding: 14px 8px 6px; text-align: left; color: var(--on-surface-var); border-radius: 0 0 8px 8px; }
-  .disclose:hover b { color: var(--primary); }
-  .disclose .chev { transition: transform .2s; }
+  kbd { font: 500 .9em/1 var(--b-num); padding: 3px 6px 2px; min-width: 20px; text-align: center; color: var(--ink);
+        border: 1px solid var(--border-control); border-bottom-width: 2px; border-radius: var(--b-r); background: var(--surface-panel); }
+  .plus { color: var(--ink-muted); font-size: .85em; }
+  .fn { display: inline-flex; align-items: center; gap: 5px; height: calc(var(--b-ctl) - 8px); padding: 0 8px; border-radius: var(--b-r); background: var(--surface-selected); font-weight: 500; }
+  .fn .i { width: 13px; height: 13px; }
+  .arg { color: var(--ink-muted); max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+  .then { color: var(--ink-muted); margin: 0 2px; }
+  .rec.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .disclose { display: flex; align-items: center; gap: var(--space-2); width: 100%; border: 0; border-bottom: 1px solid var(--border-soft); background: transparent; padding: 10px 0; text-align: left; cursor: pointer; }
+  .disclose .chev { color: var(--ink-muted); }
   .disclose.open .chev { transform: rotate(90deg); }
-  .disclose b { color: var(--on-surface); font-weight: 500; transition: color .15s; }
-  .disclose .count { font-size: 11px; line-height: 16px; font-weight: 500; background: var(--primary); color: var(--on-primary); border-radius: 8px; padding: 0 8px; }
+  .disclose b { font-weight: 600; }
+  .disclose .count { margin-left: auto; color: var(--ink-muted); white-space: nowrap; }
 
-  /* feel + apps */
-  .row { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-top: 1px solid var(--outline-var); }
-  .card-head + .row { border-top: 0; }
-  .row > .grow { min-width: 0; }
-  .row small { display: block; color: var(--on-surface-var); font-size: 12px; line-height: 16px; letter-spacing: .03em; }
-  input[type=range] { --p: 50%; appearance: none; width: 140px; height: 4px; border-radius: 2px; outline: none; flex: none; margin: 0;
-                      background: linear-gradient(90deg, var(--primary) var(--p), var(--secondary-container) var(--p)); }
-  input[type=range]::-webkit-slider-thumb { appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--primary); box-shadow: var(--elev1); transition: box-shadow .15s; }
-  input[type=range]:hover::-webkit-slider-thumb { box-shadow: 0 0 0 10px color-mix(in srgb, var(--primary) 12%, transparent); }
-  .val { min-width: 56px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; color: var(--on-surface-var); }
-  .num { width: 80px; height: 40px; border-radius: 4px; border: 0; box-shadow: inset 0 0 0 1px var(--outline); background: transparent; padding: 0 12px; outline: none; font-size: 16px; }
-  .num:focus, .text-in:focus { box-shadow: inset 0 0 0 2px var(--primary); }
-  .chiplist { display: flex; flex-wrap: wrap; gap: 8px; min-height: 32px; align-items: center; }
-  .appchip { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 4px 0 12px; border-radius: 8px; border: 1px solid var(--outline); font-weight: 500; color: var(--on-surface-var); }
-  .appchip button { border: 0; background: transparent; width: 24px; height: 24px; border-radius: 12px; display: grid; place-items: center; color: var(--on-surface-var); }
-  .appchip button:hover { background: color-mix(in srgb, var(--on-surface-var) 12%, transparent); }
-  .appchip svg { width: 18px; height: 18px; }
-  .add-row { display: flex; gap: 8px; margin-top: 16px; }
-  .text-in { flex: 1; height: 40px; border-radius: 4px; border: 0; box-shadow: inset 0 0 0 1px var(--outline); background: transparent; padding: 0 16px; outline: none; min-width: 0; }
-  .text-in:hover { box-shadow: inset 0 0 0 1px var(--on-surface); }
-  .btn { height: 40px; padding: 0 24px; border-radius: 20px; border: 1px solid var(--outline); background: transparent; color: var(--primary); display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 500; transition: background-color .15s, box-shadow .15s; }
-  .btn svg { width: 18px; height: 18px; margin-left: -8px; }
-  .btn:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); }
-  .btn.accent { background: var(--primary); color: var(--on-primary); border-color: transparent; }
-  .btn.accent:hover { box-shadow: var(--elev1); background: color-mix(in srgb, var(--on-primary) 8%, var(--primary)); }
-  .btn.tonal { background: var(--secondary-container); color: var(--on-secondary-container); border-color: transparent; }
-  .btn.tonal:hover { box-shadow: var(--elev1); }
-  .btn.text { border-color: transparent; padding: 0 12px; }
-  .btn:disabled { opacity: .38; pointer-events: none; }
-  .btn.accent:disabled { background: color-mix(in srgb, var(--on-surface) 12%, transparent); color: var(--on-surface); opacity: .5; }
-  .empty { color: var(--on-surface-var); font-size: 14px; }
+  /* inspector: knob, feel, apps */
+  .insp { grid-area: insp; display: flex; flex-direction: column; gap: var(--space-2); overflow-y: auto; min-height: 0;
+          padding: var(--space-4); background: var(--surface-panel); border-left: 1px solid var(--border); }
+  .insp > .b-label:not(:first-child) { margin-top: var(--space-4); }
+  .insp .b-readout { background: var(--surface-window); }
+  .irow { display: flex; align-items: center; gap: var(--space-2); min-height: var(--b-row); }
+  .irow small { display: block; color: var(--ink-muted); font-size: .9em; }
+  .irow.wrap { flex-wrap: wrap; row-gap: var(--space-1); }
+  .irow.wrap .grow { flex-basis: 100%; }
+  .irow.wrap input[type=range] { flex: 1; }
+  .val { min-width: 42px; text-align: right; color: var(--ink-muted); }
+  .num { width: 64px; }
+  input[type=range] { --p: 50%; appearance: none; width: 96px; height: 4px; margin: 0; flex: none; border-radius: var(--b-pill); outline-offset: 6px;
+                      background: linear-gradient(90deg, var(--accent) var(--p), var(--border) var(--p)); }
+  input[type=range]::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface-window); box-shadow: 0 0 0 1px var(--accent); }
+  [data-theme^="instrument"] input[type=range]::-webkit-slider-thumb { border-radius: 1px; width: 8px; height: 14px; }
+  .chiplist { display: flex; flex-wrap: wrap; gap: 4px; }
+  .appchip { display: inline-flex; align-items: center; gap: 2px; height: calc(var(--b-ctl) - 6px); padding: 0 2px 0 8px; border: 1px solid var(--border); border-radius: var(--b-r); background: var(--surface-window); font-family: var(--b-num); font-size: .92em; }
+  .appchip button { width: 20px; height: 20px; display: grid; place-items: center; border: 0; border-radius: var(--b-r); background: transparent; color: var(--ink-muted); cursor: pointer; }
+  .appchip button:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+  .appchip .i { width: 12px; height: 12px; }
+  .add-row { display: flex; gap: var(--space-2); }
+  .add-row .b-input { flex: 1; }
+  .empty { color: var(--ink-muted); }
 
   /* general */
-  .seg { display: inline-flex; border: 1px solid var(--outline); border-radius: 20px; overflow: hidden; }
-  .seg button { border: 0; border-left: 1px solid var(--outline); background: transparent; height: 40px; padding: 0 16px; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; transition: background-color .15s; }
-  .seg button:first-child { border-left: 0; }
-  .seg button svg { width: 18px; height: 18px; }
-  .seg button:hover { background: color-mix(in srgb, var(--on-surface) 8%, transparent); }
-  .seg button.sel { background: var(--secondary-container); color: var(--on-secondary-container); }
-  .ref { display: flex; flex-wrap: wrap; gap: 8px; }
-  .ref .fn { background: transparent; border: 1px solid var(--outline-var); color: var(--on-surface-var); }
+  .names { color: var(--ink-muted); line-height: 2.2; padding-top: var(--space-2); }
+  .ref { display: flex; flex-wrap: wrap; gap: 4px; padding-top: var(--space-2); }
+  .ref .fn { background: transparent; border: 1px solid var(--border); font-weight: 400; }
 
-  /* dialogs */
-  .overlay { position: fixed; inset: 0; background: var(--scrim); z-index: 30; display: grid; place-items: center; animation: fadein .2s ease-out; }
-  @keyframes fadein { from { opacity: 0; } }
-  .dialog { background: var(--surface-high); border-radius: 28px; box-shadow: var(--elev3); padding: 24px; max-width: min(840px, 92vw); max-height: 86vh; display: flex; flex-direction: column; gap: 16px; animation: rise .25s cubic-bezier(.2,0,0,1); }
-  @keyframes rise { from { opacity: 0; transform: translateY(16px) scale(.97); } }
-  .dialog h2 { font-size: 24px; line-height: 32px; font-weight: 400; }
-  .dialog .actions-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
-  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; overflow-y: auto; padding: 2px; }
-  .tcard { border: 0; background: var(--surface-low); border-radius: 16px; padding: 16px; display: flex; gap: 16px; text-align: left; align-items: flex-start; transition: background-color .15s, box-shadow .2s; }
-  .tcard:hover { background: var(--surface-highest); box-shadow: var(--elev1); }
-  .tcard .ticon { width: 40px; height: 40px; border-radius: 12px; background: var(--primary-container); display: grid; place-items: center; color: var(--on-primary-container); flex: none; }
-  .tcard .ticon svg { width: 24px; height: 24px; }
-  .tcard b { display: block; font-weight: 500; font-size: 16px; line-height: 24px; margin-bottom: 2px; }
-  .tcard small { color: var(--on-surface-var); font-size: 12px; line-height: 16px; letter-spacing: .02em; }
+  /* dialogs and toast */
+  .overlay { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; }
+  .b-dialog.wide { width: 780px; max-width: 92vw; max-height: 86vh; grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-2); overflow-y: auto; }
+  .tcard { display: flex; gap: var(--space-3); align-items: flex-start; text-align: left; padding: var(--space-3); cursor: pointer;
+           background: var(--surface-panel); border: 1px solid var(--border); border-radius: var(--b-r); }
+  .tcard:hover { border-color: var(--border-control); }
+  .tcard .ticon { width: 28px; height: 28px; display: grid; place-items: center; flex: none; border: 1px solid var(--border); border-radius: var(--b-r); background: var(--surface-window); }
+  .tcard b { display: block; font-weight: 600; margin-bottom: 2px; }
+  .tcard small { color: var(--ink-muted); font-size: .92em; line-height: 1.35; }
+  #toast { position: fixed; left: 50%; bottom: var(--space-5); transform: translateX(-50%); z-index: 40; max-width: 60vw; pointer-events: none; }
+  #toast.error { background: var(--status-bad); color: var(--on-status-bad); }
 
-  /* bottom bar + snackbar */
-  .bar { grid-area: bar; display: flex; align-items: center; gap: 12px; padding: 12px 32px; background: var(--surface); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); display: none; }
-  .bar.dirty .dot { display: block; }
-  #status { color: var(--on-surface-var); font-size: 14px; }
-  #toast { position: fixed; left: calc(50% + 140px); bottom: 80px; transform: translate(-50%, 12px); opacity: 0; transition: .25s cubic-bezier(.2,0,0,1); pointer-events: none; z-index: 40;
-           background: var(--inverse-surface); color: var(--inverse-on-surface); box-shadow: var(--elev3); padding: 14px 16px; border-radius: 4px; max-width: 60vw; min-width: 280px; }
-  #toast.show { opacity: 1; transform: translate(-50%, 0); }
-  #toast.error { background: var(--error-container); color: var(--on-error-container); }
-  ::-webkit-scrollbar { width: 12px; } ::-webkit-scrollbar-thumb { background: var(--outline-var); border-radius: 6px; border: 4px solid transparent; background-clip: content-box; }
-
-  /* narrow windows */
-  @media (max-width: 1240px) { .cols { grid-template-columns: 1fr; } }
-  @media (max-width: 1000px) { .action { grid-template-columns: 180px 1fr auto; } }
-  @media (max-width: 820px) {
-    .app { grid-template-columns: 220px 1fr; }
-    .action { grid-template-columns: 1fr auto; } .alabel { grid-column: 1 / 3; } .err { grid-column: 1 / 3; }
+  /* narrow windows: the sidebar collapses to icons below 900px */
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 52px minmax(0, 1fr) 230px; }
+    .side .nm, .side .b-num, .side .live, .side .b-nav__group, .brand b { display: none; }
+    .b-nav__item { justify-content: center; }
+    .action { grid-template-columns: minmax(0, 1fr) auto; } .alabel, .err { grid-column: 1 / 3; }
     .rec span { display: none; }
-    main { padding: 20px 20px 24px; }
-    #toast { left: calc(50% + 110px); }
+    main { padding: var(--space-4); }
   }
 </style>
 </head>
 <body>
-<div class="app">
-  <aside class="side">
-    <div class="brand">
-      <div class="logo"></div>
-      <div><b>Knurl</b><span id="brand-sub"></span></div>
-    </div>
-    <button class="fab" id="add-layer" title="Add a blank layer or start from a template"><svg data-icon="add"></svg>New layer</button>
-    <div class="label">Layers</div>
+<div class="app" id="app">
+  <nav class="side" aria-label="Layers">
+    <div class="brand"><div class="logo"></div><b>Knurl</b></div>
+    <div class="b-nav__group"><span>Layers</span><span class="b-num" id="layer-count"></span></div>
     <div id="layers"></div>
+    <button class="b-nav__item add" id="add-layer" title="Add a blank layer or start from a template"><svg data-icon="add"></svg><span class="nm">New layer</span></button>
     <div class="grow"></div>
-    <button class="side-btn" id="nav-general"><svg data-icon="settings"></svg>General</button>
-  </aside>
+    <button class="b-nav__item" id="nav-general"><svg data-icon="settings"></svg><span class="nm">General</span></button>
+  </nav>
+
+  <header class="b-toolbar bar">
+    <div class="tool-left" id="tool-layer">
+      <input class="title" id="layer-name" spellcheck="false" maxlength="40" title="Layer name">
+      <label class="sw" title="Turn off to skip this layer when switching"><button class="b-switch" role="switch" id="layer-enabled" aria-checked="true"></button>Enabled</label>
+      <div class="menu-wrap">
+        <button class="b-btn b-btn--quiet icon" id="more" title="More"><svg data-icon="more"></svg></button>
+        <div class="b-menu pop" id="more-menu" hidden>
+          <button class="b-menu__item" id="move-up"><svg data-icon="arrow_upward"></svg>Move up</button>
+          <button class="b-menu__item" id="move-down"><svg data-icon="arrow_downward"></svg>Move down</button>
+          <div class="b-menu__sep"></div>
+          <button class="b-menu__item b-menu__item--danger" id="delete"><svg data-icon="delete"></svg>Delete layer</button>
+        </div>
+      </div>
+    </div>
+    <h1 class="b-heading" id="tool-general" hidden>General</h1>
+    <span class="status" id="status">All changes saved</span>
+    <button class="b-btn b-btn--quiet" id="revert" disabled>Revert</button>
+    <button class="b-btn b-btn--primary" id="save" disabled title="Save (Ctrl+S)">Save</button>
+  </header>
 
   <main>
     <section class="page" id="page-layer">
-      <div class="title-row">
-        <input class="title" id="layer-name" spellcheck="false" maxlength="40" title="Layer name">
-        <label class="switch" title="Turn off to skip this layer when switching"><input type="checkbox" id="layer-enabled"><span class="muted">Enabled</span></label>
-        <button class="icon-btn" id="more" title="More"><svg data-icon="more_vert"></svg></button>
-        <div class="pop" id="more-menu" hidden style="right:0; top:46px">
-          <button id="move-up"><svg data-icon="arrow_upward"></svg>Move up</button>
-          <button id="move-down"><svg data-icon="arrow_downward"></svg>Move down</button>
-          <hr>
-          <button id="delete" class="danger"><svg data-icon="delete"></svg>Delete layer</button>
+      <div>
+        <div class="sec-head"><h2 class="b-heading">Turning</h2></div>
+        <div class="row">
+          <span class="b-label lbl">Preset</span>
+          <select class="b-select" id="picker" title="Choose what turning the knob does"></select>
+          <div class="grow"></div>
+          <label class="sw" title="Swap which way the knob turns: clockwise and counter-clockwise trade actions">Reverse direction<button class="b-switch" role="switch" id="reverse" aria-checked="false"></button></label>
         </div>
       </div>
-
-      <div class="card">
-        <div class="card-head">
-          <h2>Turning</h2>
-          <button class="picker" id="picker" title="Choose what turning the knob does"></button>
-          <label class="switch" style="margin-left:auto" title="Swap which way the knob turns: clockwise and counter-clockwise trade actions"><span class="muted">Reverse direction</span><input type="checkbox" id="reverse"></label>
-        </div>
-        <div class="tiles" id="tiles" hidden></div>
-      </div>
-
-      <div class="card">
-        <div class="card-head"><h2>Actions</h2><span class="muted">Key names joined with +, or a function name. Separate steps with a comma.</span></div>
-        <div class="actions" id="actions"></div>
+      <div>
+        <div class="sec-head"><h2 class="b-heading">Actions</h2><span class="b-help">Key names joined with +, or a function name. Separate steps with a comma.</span></div>
+        <div id="actions"></div>
         <button class="disclose" id="disclose">
           <svg class="chev" data-icon="chevron_right"></svg>
-          <span><b>Tap, then turn</b> &nbsp;<span class="muted">Tap the knob, then turn within a moment for two more actions</span></span>
-          <span class="count" id="tap-count" hidden></span>
+          <b>Hold and turn</b><span class="b-help">Turn while holding the knob down (or tap, then turn). Leave empty to just turn.</span>
+          <span class="count b-num" id="tap-count" hidden></span>
         </button>
-        <div class="actions" id="tap-actions" hidden></div>
-      </div>
-
-      <div class="cols">
-        <div class="card">
-          <div class="card-head"><h2>Feel</h2></div>
-          <div class="row"><div class="grow">Speed<small>Scroll distance, volume step and key repeats per click</small></div>
-            <input type="range" id="speed" min="0.25" max="5" step="0.25"><span class="val" id="speed-val"></span></div>
-          <div class="row"><div class="grow">Accelerate<small>Go further when you spin quickly</small></div>
-            <label class="switch"><input type="checkbox" id="accel"></label></div>
-          <div class="row"><div class="grow">Max per second<small>0 means no limit</small></div>
-            <input class="num" type="number" id="maxps" min="0" max="50"></div>
-        </div>
-        <div class="card">
-          <div class="card-head"><h2>Apps</h2><span class="muted">Switch here automatically</span></div>
-          <div class="chiplist" id="app-chips"></div>
-          <div class="add-row">
-            <input class="text-in" id="app-input" list="running" placeholder="Program (chrome) or title:YouTube" spellcheck="false"
-                   title="A program name switches when that program is focused; title:text when a window's title contains the text">
-            <datalist id="running"></datalist>
-            <button class="btn tonal" id="app-add">Add</button>
-          </div>
-        </div>
+        <div id="tap-actions" hidden></div>
       </div>
     </section>
 
     <section class="page" id="page-general" hidden>
-      <div class="title-row"><h1>General</h1></div>
-      <div class="card">
-        <div class="card-head"><h2>Switching layers</h2></div>
-        <div class="row"><div class="grow">Gesture<small>How the knob's press switches to the next layer</small></div>
-          <div class="seg" id="gesture"></div></div>
-        <div class="row"><div class="grow">Tap window<small>How long to wait for another tap before a press counts</small></div>
-          <input type="range" id="window" min="100" max="1000" step="10"><span class="val" id="window-val"></span></div>
+      <div>
+        <div class="sec-head"><h2 class="b-heading">Appearance</h2></div>
+        <div class="row"><div class="grow">Style<small>Instrument: graphite and amber, mono numbers. Native: quiet, like Windows.</small></div><div class="b-seg" id="style"></div></div>
+        <div class="row"><div class="grow">Appearance<small>Light or dark; Match system follows Windows</small></div><div class="b-seg" id="appearance"></div></div>
       </div>
-      <div class="card">
-        <div class="card-head"><h2>Backup</h2><span class="muted">Save or load a set of layers</span></div>
-        <div style="display:flex; gap:8px; margin-top:8px">
-          <button class="btn" id="import"><svg data-icon="download"></svg>Import…</button>
-          <button class="btn" id="export"><svg data-icon="upload"></svg>Export…</button>
+      <div>
+        <div class="sec-head"><h2 class="b-heading">Switching layers</h2></div>
+        <div class="row"><div class="grow">Gesture<small>How the knob's press switches to the next layer</small></div><div class="b-seg" id="gesture"></div></div>
+        <div class="row"><div class="grow">Tap window<small>How long to wait for another tap before a press counts</small></div>
+          <input type="range" id="window" min="100" max="1000" step="10"><span class="val b-num" id="window-val"></span></div>
+      </div>
+      <div>
+        <div class="sec-head"><h2 class="b-heading">Backup</h2><span class="b-help">Save or load a set of layers</span></div>
+        <div class="row">
+          <button class="b-btn" id="import"><svg data-icon="download"></svg>Import…</button>
+          <button class="b-btn" id="export"><svg data-icon="upload"></svg>Export…</button>
         </div>
       </div>
-      <div class="card">
-        <div class="card-head"><h2>Names you can use</h2></div>
-        <div class="muted" style="margin-bottom:10px; line-height:2">Any key as written on the keyboard, joined with + &nbsp;
+      <div>
+        <div class="sec-head"><h2 class="b-heading">Names you can use</h2></div>
+        <div class="names">Any key as written on the keyboard, joined with + &nbsp;
           <kbd>Ctrl</kbd> <span class="plus">+</span> <kbd>Shift</kbd> <span class="plus">+</span> <kbd>Z</kbd> &nbsp;<kbd>Page Up</kbd> &nbsp;<kbd>F5</kbd> &nbsp;<kbd>Up Arrow</kbd>,
           these functions, <span class="fn">Open …</span> <span class="fn">Type …</span>, and any program's own mixer volume:
           <span class="fn">Discord Volume +</span> <span class="fn">Discord Volume -</span> <span class="fn">Discord Mute</span></div>
@@ -350,30 +239,43 @@
     </section>
   </main>
 
-  <footer class="bar" id="bar">
-    <span class="dot"></span><span id="status">All changes saved</span>
-    <div class="grow"></div>
-    <button class="btn text" id="revert" disabled>Revert</button>
-    <button class="btn accent" id="save" disabled title="Save (Ctrl+S)">Save</button>
-  </footer>
+  <aside class="insp" id="insp">
+    <div class="b-label">Knob</div>
+    <div class="b-readout" id="knob"></div>
+    <div class="b-label">Feel</div>
+    <div class="irow wrap"><div class="grow">Speed<small>Scroll distance, volume step and key repeats</small></div>
+      <input type="range" id="speed" min="0.25" max="5" step="0.25"><span class="val b-num" id="speed-val"></span></div>
+    <div class="irow"><div class="grow">Accelerate<small>Further when you spin fast</small></div><button class="b-switch" role="switch" id="accel" aria-checked="false"></button></div>
+    <div class="irow"><div class="grow">Max per second<small>0 means no limit</small></div><input class="b-input num b-num" type="number" id="maxps" min="0" max="50"></div>
+    <div class="b-label">Apps</div>
+    <div class="b-help">Switch to this layer when one of these is focused.</div>
+    <div class="chiplist" id="app-chips"></div>
+    <div class="add-row">
+      <input class="b-input" id="app-input" list="running" placeholder="e.g. chrome" spellcheck="false"
+             title="A program name switches when that program is focused; title:text when a window's title contains the text">
+      <datalist id="running"></datalist>
+      <button class="b-btn" id="app-add">Add</button>
+    </div>
+  </aside>
 </div>
 
-<div class="overlay" id="gallery" hidden>
-  <div class="dialog" style="width: 820px">
-    <div class="card-head"><h2>New layer</h2><span class="muted">Start blank or from a template. You can change everything afterwards.</span></div>
+<div class="overlay b-scrim" id="gallery" hidden>
+  <div class="b-dialog wide">
+    <h2>New layer</h2>
+    <p>Start blank or from a template. You can change everything afterwards.</p>
     <div class="gallery" id="gallery-grid"></div>
-    <div class="actions-row"><button class="btn text" id="gallery-cancel">Cancel</button></div>
+    <div class="b-dialog__actions"><button class="b-btn" id="gallery-cancel">Cancel</button></div>
   </div>
 </div>
 
-<div class="overlay" id="confirm" hidden>
-  <div class="dialog" style="width: 420px">
+<div class="overlay b-scrim" id="confirm" hidden>
+  <div class="b-dialog">
     <h2 id="confirm-title"></h2>
-    <div class="muted" id="confirm-text" style="font-size:13.5px"></div>
-    <div class="actions-row" id="confirm-buttons"></div>
+    <p id="confirm-text"></p>
+    <div class="b-dialog__actions" id="confirm-buttons"></div>
   </div>
 </div>
-<div id="toast"></div>
+<div class="b-toast" id="toast" hidden></div>
 
 <script>
 "use strict";
@@ -392,58 +294,77 @@ function call(cmd, args = {}) {
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 /*ICONS*/
-const svg = (name, cls = "") => `<svg class="${cls}" viewBox="0 -960 960 960"><path d="${ICON_PATHS[name]}"/></svg>`;
-document.querySelectorAll("svg[data-icon]").forEach(el => { el.setAttribute("viewBox", "0 -960 960 960"); el.innerHTML = `<path d="${ICON_PATHS[el.dataset.icon]}"/>`; });
+const svg = (name, cls = "") => `<svg class="i ${cls}" viewBox="0 0 24 24">${ICON[name] || ""}</svg>`;
+document.querySelectorAll("svg[data-icon]").forEach(el => { el.setAttribute("viewBox", "0 0 24 24"); el.classList.add("i"); el.innerHTML = ICON[el.dataset.icon]; });
 
-const ICONS = { custom: "tune", scroll: "mouse", scrollh: "width", zoom: "zoom_in", volume: "volume_up", tracks: "skip_next", undo: "undo",
+// Bench switches are buttons with aria-checked; a click flips them and fires "change" like a checkbox
+const on = el => el.getAttribute("aria-checked") === "true";
+const setOn = (el, v) => el.setAttribute("aria-checked", String(!!v));
+document.addEventListener("click", e => {
+  const s = e.target.closest(".b-switch"); if (!s) return;
+  setOn(s, !on(s)); s.dispatchEvent(new Event("change", { bubbles: true }));
+});
+
+const ICONS = { custom: "tune", scroll: "mouse", scrollh: "width", zoom: "zoom_in", volume: "volume_up", media: "music_note", tracks: "skip_next", undo: "undo",
                 arrowsv: "swap_vert", arrowsh: "swap_horiz", page: "description", tabs: "tab", brush: "brush" };
-const PAIR_ICONS = ["custom", "scroll", "scrollh", "zoom", "volume", "tracks", "undo", "arrowsv", "arrowsh", "page", "tabs", "brush"];
-const TEMPLATE_ICONS = { Discord: "headset_mic", YouTube: "smart_display", Spotify: "music_note", "Video editing": "movie", "VS Code": "code",
-                         "Teams call": "groups", "Zoom call": "videocam", Photoshop: "brush", Figma: "design_services", Excel: "table" };
-// [key, label, hint, placeholder, icon]; the last two are the "Tap, then turn" pair
+const PAIR_ICONS = ["custom", "scroll", "scrollh", "zoom", "volume", "media", "tracks", "undo", "arrowsv", "arrowsh", "page", "tabs", "brush"];
+const TEMPLATE_ICONS = { Discord: "headset", YouTube: "video", Spotify: "waves", "Video editing": "film", "VS Code": "code",
+                         "Teams call": "headphones", "Zoom call": "camera", Photoshop: "brush", Figma: "shapes", Excel: "grid" };
+// [key, label, hint, placeholder, icon]; the last two are the "Hold and turn" pair
 const FIELDS = [
   ["clockwise", "Turn clockwise", "Turn right", "Not set, e.g. Scroll Down", "rotate_right"],
   ["counter_clockwise", "Turn counter-clockwise", "Turn left", "Not set, e.g. Scroll Up", "rotate_left"],
-  ["press", "Press", "Tap the knob", "Not set, e.g. Middle Click", "radio_button_checked"],
-  ["shift_clockwise", "Tap + turn clockwise", "Tap, then turn right", "Not set, e.g. Zoom +", "rotate_90_degrees_cw"],
-  ["shift_counter_clockwise", "Tap + turn counter-clockwise", "Tap, then turn left", "Not set, e.g. Zoom -", "rotate_90_degrees_ccw"],
+  ["press", "Press", "Tap the knob", "Not set, e.g. Middle Click", "press"],
+  ["shift_clockwise", "Hold + turn clockwise", "Or tap, then turn right", "Not set, e.g. Zoom +", "hold_cw"],
+  ["shift_counter_clockwise", "Hold + turn counter-clockwise", "Or tap, then turn left", "Not set, e.g. Zoom -", "hold_ccw"],
 ];
 const GESTURES = [["double_tap", "Double-tap"], ["triple_tap", "Triple-tap"], ["tray_only", "Tray menu only"]];
+const STYLES = [["instrument", "Instrument"], ["native", "Native"]];
+const APPEARANCES = [["system", "Match system"], ["light", "Light"], ["dark", "Dark"]];
 const KEYS = ["Enter", "Esc", "Space", "Tab", "Backspace", "Delete", "Insert", "Home", "End", "Page Up", "Page Down",
   "Up Arrow", "Down Arrow", "Left Arrow", "Right Arrow", "Plus", ...Array.from({ length: 24 }, (_, i) => `F${i + 1}`),
   ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split(""), "[", "]", ",", ".", "/", ";", "-"];
 const MODS = ["Ctrl", "Shift", "Alt", "Win"];
 
 const S = { cfg: null, saved: "", sel: 0, page: "layer", pairs: [], functions: [], templates: [], apps: [], active: 0,
-            recording: null, pairOf: [], tapOpen: false, pickerOpen: false };
+            recording: null, pairOf: [], tapOpen: false, dark: true };
 const L = () => S.cfg.layers[S.sel];
-const fill = r => r.style.setProperty("--p", `${(r.value - r.min) / (r.max - r.min) * 100}%`);   // slider's active track
+const fill = r => r.style.setProperty("--p", `${(r.value - r.min) / (r.max - r.min) * 100}%`);   // slider's filled track
+const seg = (el, items, value) => { el.innerHTML = items.map(([v, t]) => `<button data-v="${v}" aria-pressed="${v === value}">${t}</button>`).join(""); };
 const appLabel = a => a.startsWith("title:") ? `title: ${a.slice(6)}` : a;
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+// --- theme: Bench "style-appearance" id on <html>; the title bar follows through Rust ---
+function applyTheme() {
+  const a = S.cfg.appearance, dark = a === "system" ? S.dark : a === "dark";
+  const theme = `${S.cfg.style === "native" ? "native" : "instrument"}-${dark ? "dark" : "light"}`;
+  if (document.documentElement.dataset.theme !== theme) { document.documentElement.dataset.theme = theme; call("theme", { theme }); }
+}
 
 // --- toast, dialogs, dirty state ---
 let toastTimer;
 function toast(text, error = false) {
   const t = $("toast");
-  t.textContent = text; t.classList.toggle("error", error); t.classList.add("show");
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), error ? 5000 : 2200);
+  t.textContent = text; t.classList.toggle("error", error); t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, error ? 5000 : 2200);
 }
-function ask(title, text, buttons) {          // buttons: [[label, value, cls]] -> resolves with the value (Esc = null)
+// buttons: [[label, value, kind]] in Windows order (primary first, Cancel last); kind "primary" or "danger" -> value (Esc = null)
+function ask(title, text, buttons) {
   return new Promise(resolve => {
     $("confirm-title").textContent = title; $("confirm-text").textContent = text;
-    $("confirm-buttons").innerHTML = buttons.map(([l, v, c]) => `<button class="btn ${c || "text"}" data-v="${esc(v)}">${esc(l)}</button>`).join("");
+    $("confirm-buttons").innerHTML = buttons.map(([l, v, k]) => `<button class="b-btn ${k ? `b-btn--${k}` : ""}" data-v="${esc(v)}">${esc(l)}</button>`).join("");
     $("confirm").hidden = false;
     const done = v => { $("confirm").hidden = true; document.removeEventListener("keydown", onKey, true); resolve(v); };
     const onKey = e => { if (e.key === "Escape") { e.stopPropagation(); done(null); } };
     document.addEventListener("keydown", onKey, true);
     $("confirm-buttons").onclick = e => { const b = e.target.closest("button"); if (b) done(b.dataset.v); };
-    $("confirm-buttons").querySelector(".accent")?.focus();
+    $("confirm-buttons").querySelector(".b-btn--primary")?.focus();
   });
 }
 const isDirty = () => JSON.stringify(S.cfg) !== S.saved;
 function changed() {
   const dirty = isDirty();
-  $("bar").classList.toggle("dirty", dirty);
+  $("status").classList.toggle("dirty", dirty);
   $("status").textContent = dirty ? "Unsaved changes" : "All changes saved";
   $("save").disabled = $("revert").disabled = !dirty;
 }
@@ -460,16 +381,13 @@ function summary(l, i) {
   return [turn, l.press].filter(Boolean).join(" · ") || "Nothing set yet";
 }
 function renderSidebar() {
-  const n = S.cfg.layers.length;
-  $("brand-sub").textContent = `${n} layer${n === 1 ? "" : "s"}`;
+  $("layer-count").textContent = S.cfg.layers.length;
   $("layers").innerHTML = S.cfg.layers.map((l, i) => `
-    <button class="layer ${S.page === "layer" && i === S.sel ? "sel" : ""} ${l.enabled ? "" : "off"}" data-i="${i}" draggable="true"
-            title="Drag to reorder">
-      <div class="name"><span>${esc(l.name || "Untitled")}</span>${i === S.active && l.enabled ? '<span class="live" title="The knob is on this layer now">Active</span>' : ""}<span class="lnum">${l.enabled ? i + 1 : "off"}</span></div>
-      <div class="sum">${esc(summary(l, i))}</div>
-      ${l.apps.length ? `<div class="apps">${l.apps.slice(0, 4).map(a => `<span class="tag">${esc(appLabel(a))}</span>`).join("")}${l.apps.length > 4 ? `<span class="tag">+${l.apps.length - 4}</span>` : ""}</div>` : ""}
+    <button class="b-nav__item layer ${l.enabled ? "" : "off"}" data-i="${i}" draggable="true" title="${esc(summary(l, i))}. Drag to reorder."
+            ${S.page === "layer" && i === S.sel ? 'aria-current="page"' : ""}>
+      ${svg(ICONS[PAIR_ICONS[S.pairOf[i]?.index ?? 0]] || "tune")}<span class="nm">${esc(l.name || "Untitled")}</span>${i === S.active && l.enabled ? '<span class="b-pill b-pill--ok live" title="The knob is on this layer now">Active</span>' : ""}<span class="b-num">${l.enabled ? i + 1 : "off"}</span>
     </button>`).join("");
-  $("nav-general").classList.toggle("sel", S.page === "general");
+  if (S.page === "general") $("nav-general").setAttribute("aria-current", "page"); else $("nav-general").removeAttribute("aria-current");
 }
 $("layers").addEventListener("click", e => {
   const b = e.target.closest(".layer"); if (!b) return;
@@ -504,30 +422,23 @@ function moveLayer(from, to) {
   S.sel = ls.indexOf(selLayer); render(); changed();
 }
 
-// --- turning picker ---
+// --- turning preset ---
 function renderPicker() {
-  const idx = S.pairOf[S.sel]?.index ?? 0, p = S.pairs[idx];
-  $("picker").innerHTML = `${svg(ICONS[PAIR_ICONS[idx]] || ICONS.custom)}<span>${esc(p ? p.name : "Custom")}</span>${svg("expand_more", "chev")}`;
-  $("picker").classList.toggle("open", S.pickerOpen);
-  $("tiles").hidden = !S.pickerOpen;
-  $("tiles").innerHTML = S.pairs.map((p, i) => `
-    <button class="tile ${i === idx ? "sel" : ""}" data-i="${i}">${svg(i === idx ? "check" : ICONS[PAIR_ICONS[i]] || ICONS.custom)}<span>${esc(p.name)}</span></button>`).join("");
+  const idx = S.pairOf[S.sel]?.index ?? 0;
+  $("picker").innerHTML = S.pairs.map((p, i) => `<option value="${i}" ${i === idx ? "selected" : ""}>${esc(p.name)}</option>`).join("");
 }
-$("picker").addEventListener("click", () => { S.pickerOpen = !S.pickerOpen; renderPicker(); });
 const refreshAllPairs = () => S.cfg.layers.forEach((_, i) => { if (i !== S.sel) refreshPair(i); });   // the selected one refreshes on render
 async function refreshPair(i = S.sel) {
   const l = S.cfg.layers[i];
   const r = await call("pair", { cw: l.clockwise, ccw: l.counter_clockwise });
   S.pairOf[i] = r;
-  if (i === S.sel && S.page === "layer") { renderPicker(); if (r.index > 0) $("reverse").checked = r.reversed; }
+  if (i === S.sel && S.page === "layer") { renderPicker(); if (r.index > 0) setOn($("reverse"), r.reversed); }
   renderSidebar();
 }
-$("tiles").addEventListener("click", e => {
-  const t = e.target.closest(".tile"); if (!t) return;
-  const i = +t.dataset.i, p = S.pairs[i], l = L();
-  S.pickerOpen = false;
-  if (i === 0) { renderPicker(); return; }
-  const rev = $("reverse").checked;
+$("picker").addEventListener("change", e => {
+  const i = +e.target.value, p = S.pairs[i], l = L();
+  if (i === 0) return;                                    // "Custom": keep the actions as they are
+  const rev = on($("reverse"));
   l.clockwise = rev ? p.ccw : p.cw; l.counter_clockwise = rev ? p.cw : p.ccw;
   if (!l.press.trim()) l.press = p.press;
   if (!l.name.trim() || l.name === "New layer" || S.pairs.some(q => q.name === l.name)) l.name = p.name;
@@ -552,21 +463,20 @@ function actionRow(i) {
   const [key, label, hint, ph, icon] = FIELDS[i];
   return `
     <div class="action" data-i="${i}">
-      <div class="alabel"><div class="glyph">${svg(icon)}</div><div><b>${label}</b><small>${hint}</small></div></div>
+      <div class="alabel">${svg(icon)}<div><b>${label}</b><small>${hint}</small></div></div>
       <div class="field" id="field-${i}">
         <input id="in-${i}" placeholder="${ph}" spellcheck="false" autocomplete="off" value="${esc(L()[key])}">
         <div class="chips" id="chips-${i}"></div>
-        <div class="pop suggest" id="sug-${i}" hidden></div>
+        <div class="b-menu pop suggest" id="sug-${i}" hidden></div>
       </div>
-      <button class="rec" id="rec-${i}" title="Record a keyboard shortcut">${svg("keyboard")}<span>Record</span></button>
+      <button class="b-btn rec" id="rec-${i}" title="Record a keyboard shortcut">${svg("keyboard")}<span>Record</span></button>
       <div class="err" id="err-${i}"></div>
     </div>`;
 }
 function renderActions() {
   $("actions").innerHTML = [0, 1, 2].map(actionRow).join("");
   $("tap-actions").innerHTML = [3, 4].map(actionRow).join("");
-  const set = [3, 4].filter(i => L()[FIELDS[i][0]].trim()).length;
-  $("tap-count").hidden = !set; $("tap-count").textContent = `${set} set`;
+  renderTapCount();
   $("tap-actions").hidden = !S.tapOpen;
   $("disclose").classList.toggle("open", S.tapOpen);
   FIELDS.forEach((_, i) => check(i));
@@ -588,7 +498,7 @@ async function check(i) {
   } else {
     field.classList.remove("show-chips");
     const p = r.problem;
-    err.innerHTML = `<span>${esc(p.message)}</span>` + (p.fix ? `<button class="fix" data-i="${i}" data-step="${esc(p.step)}" data-fix="${esc(p.fix)}">Use ‘${esc(p.fix)}’</button>` : "");
+    err.innerHTML = `<span class="b-help b-help--error">${esc(p.message)}</span>` + (p.fix ? `<button class="b-btn b-btn--quiet fix" data-i="${i}" data-step="${esc(p.step)}" data-fix="${esc(p.fix)}">Use ‘${esc(p.fix)}’</button>` : "");
   }
 }
 function setField(i, value) {
@@ -631,7 +541,7 @@ function suggest(i) {
   const list = candidates(step).filter(c => c.toLowerCase() !== step.trim().toLowerCase());
   if (!list.length || S.recording !== null) { box.hidden = true; return; }
   sugIndex = 0;
-  box.innerHTML = list.map((c, k) => `<button data-v="${esc(c)}" class="${k === 0 ? "hl" : ""}"><span>${esc(c)}</span>${S.functions.includes(c.replace(/^.*\+ /, "")) ? "<small>function</small>" : ""}</button>`).join("");
+  box.innerHTML = list.map((c, k) => `<button class="b-menu__item ${k === 0 ? "hl" : ""}" data-v="${esc(c)}"><span>${esc(c)}</span>${S.functions.includes(c.replace(/^.*\+ /, "")) ? "<small>function</small>" : ""}</button>`).join("");
   box.hidden = false;
 }
 function acceptSuggestion(i, value) {
@@ -659,7 +569,7 @@ page.addEventListener("keydown", e => {
 async function startRecording(i) {
   stopRecording();
   const r = await call("record", { field: i });
-  if (!r.ok) { toast("Couldn't start recording", true); return; }
+  if (!r.ok) { toast("Couldn't start recording. Try again.", true); return; }
   S.recording = i;
   const input = $(`in-${i}`);
   input.dataset.prev = input.value; input.value = ""; input.placeholder = "Press a shortcut…  (Esc to cancel)";
@@ -684,30 +594,38 @@ handlers.recorded = ({ field, text }) => {
 };
 handlers.record_cancel = ({ field, reason }) => { if (S.recording === field) stopRecording(); if (reason) toast(reason, true); };
 
-// --- feel + apps ---
+// --- inspector: knob, feel, apps ---
+function renderKnob(b) {
+  const pill = !b ? '<span class="b-pill b-pill--off">No reading</span>'
+    : !b.connected ? '<span class="b-pill b-pill--off">Disconnected</span>'
+    : b.percent <= 15 ? '<span class="b-pill b-pill--warn">Low</span>' : '<span class="b-pill b-pill--ok">Connected</span>';
+  $("knob").innerHTML = `<div class="b-readout__head"><span class="b-label">Battery</span>${pill}</div>` + (b
+    ? `<div class="b-readout__value">${b.percent}%</div><div class="b-help">Bluetooth, checked every minute</div>`
+    : `<div class="b-help">Shown when the knob is paired over Bluetooth.</div>`);
+}
 function renderFeel() {
   const l = L();
-  $("speed").value = Math.min(5, Math.max(0.25, l.speed));
-  $("speed-val").textContent = `${+l.speed.toFixed(2)}×`; fill($("speed"));
-  $("accel").checked = l.accelerate;
+  $("speed").value = Math.min(5, Math.max(0.25, l.speed)); fill($("speed"));
+  $("speed-val").textContent = `${+l.speed.toFixed(2)}×`;
+  setOn($("accel"), l.accelerate);
   $("maxps").value = l.max_per_sec;
 }
 $("speed").addEventListener("input", e => { L().speed = +e.target.value; renderFeel(); changed(); });
-$("accel").addEventListener("change", e => { L().accelerate = e.target.checked; changed(); });
+$("accel").addEventListener("change", e => { L().accelerate = on(e.target); changed(); });
 $("maxps").addEventListener("input", e => { L().max_per_sec = Math.max(0, parseInt(e.target.value || "0", 10) || 0); changed(); });
 
 function renderApps() {
   const apps = L().apps;
   $("app-chips").innerHTML = apps.length
     ? apps.map((a, i) => `<span class="appchip">${esc(appLabel(a))}<button data-i="${i}" title="Remove">${svg("close")}</button></span>`).join("")
-    : `<span class="empty">No apps. This layer is only used when you pick it.</span>`;
+    : `<span class="empty">None. This layer is only used when you pick it.</span>`;
 }
 function addApp() {
   let v = $("app-input").value.trim().toLowerCase();
   v = v.startsWith("title:") ? "title:" + v.slice(6).trim() : v.replace(/\.exe$/, "");
   if (!v || v === "title:") return;
   const owner = S.cfg.layers.findIndex((l, i) => i !== S.sel && l.apps.includes(v));
-  if (owner >= 0) { toast(`‘${appLabel(v)}’ already switches to ‘${S.cfg.layers[owner].name}’`, true); return; }
+  if (owner >= 0) { toast(`‘${appLabel(v)}’ already switches to ‘${S.cfg.layers[owner].name}’. Remove it there first.`, true); return; }
   if (!L().apps.includes(v)) L().apps.push(v);
   $("app-input").value = ""; renderApps(); renderSidebar(); changed();
 }
@@ -718,16 +636,16 @@ $("app-chips").addEventListener("click", e => {
   L().apps.splice(+b.dataset.i, 1); renderApps(); renderSidebar(); changed();
 });
 
-// --- layer header: name, enabled, "more" menu ---
+// --- toolbar: name, enabled, "more" menu ---
 function renderLayer() {
   const l = L();
   $("layer-name").value = l.name;
-  $("layer-enabled").checked = l.enabled;
+  setOn($("layer-enabled"), l.enabled);
   S.tapOpen = S.tapOpen || [3, 4].some(i => l[FIELDS[i][0]].trim());
   renderPicker(); renderActions(); renderFeel(); renderApps(); refreshPair();
 }
 $("layer-name").addEventListener("input", e => { L().name = e.target.value; renderSidebar(); changed(); });
-$("layer-enabled").addEventListener("change", e => { L().enabled = e.target.checked; renderSidebar(); changed(); });
+$("layer-enabled").addEventListener("change", e => { L().enabled = on(e.target); renderSidebar(); changed(); });
 $("more").addEventListener("click", e => {
   e.stopPropagation();
   $("move-up").disabled = S.sel === 0;
@@ -740,16 +658,16 @@ $("move-up").addEventListener("click", () => moveLayer(S.sel, S.sel - 1));
 $("move-down").addEventListener("click", () => moveLayer(S.sel, S.sel + 1));
 $("delete").addEventListener("click", async () => {
   if (S.cfg.layers.length === 1) return;
-  const v = await ask(`Delete ‘${L().name}’?`, "The layer is removed when you save. Revert brings it back until then.", [["Cancel", "no"], ["Delete", "yes", "accent"]]);
+  const v = await ask(`Delete ‘${L().name}’?`, "The layer is removed when you save. Revert brings it back until then.", [["Delete layer", "yes", "danger"], ["Cancel", "no"]]);
   if (v !== "yes") return;
   S.cfg.layers.splice(S.sel, 1); S.pairOf.splice(S.sel, 1); S.sel = Math.min(S.sel, S.cfg.layers.length - 1); render(); changed();
 });
 
 // --- new layer: template gallery ---
 function renderGallery() {
-  const blank = `<button class="tcard" data-t="-1"><div class="ticon">${svg("add")}</div><div><b>Blank layer</b><small>Start from scratch</small></div></button>`;
-  $("gallery-grid").innerHTML = blank + S.templates.map((t, i) =>
-    `<button class="tcard" data-t="${i}"><div class="ticon">${svg(TEMPLATE_ICONS[t.layer.name] || ICONS.custom)}</div><div><b>${esc(t.layer.name)}</b><small>${esc(t.desc)}</small></div></button>`).join("");
+  const card = (t, icon, name, desc) => `<button class="tcard" data-t="${t}"><span class="ticon">${svg(icon)}</span><span><b>${esc(name)}</b><small>${esc(desc)}</small></span></button>`;
+  $("gallery-grid").innerHTML = card(-1, "add", "Blank layer", "Start from scratch")
+    + S.templates.map((t, i) => card(i, TEMPLATE_ICONS[t.layer.name] || "tune", t.layer.name, t.desc)).join("");
 }
 $("add-layer").addEventListener("click", () => { $("gallery").hidden = false; $("gallery-grid").querySelector(".tcard")?.focus(); });
 $("gallery-cancel").addEventListener("click", () => { $("gallery").hidden = true; });
@@ -772,17 +690,25 @@ $("gallery-grid").addEventListener("click", e => {
 
 // --- general page ---
 function renderGeneral() {
-  $("gesture").innerHTML = GESTURES.map(([v, t]) => `<button data-v="${v}" class="${S.cfg.gesture === v ? "sel" : ""}">${S.cfg.gesture === v ? svg("check") : ""}${t}</button>`).join("");
-  $("window").value = S.cfg.double_tap_ms;
-  $("window-val").textContent = `${S.cfg.double_tap_ms} ms`; fill($("window"));
+  seg($("style"), STYLES, S.cfg.style);
+  seg($("appearance"), APPEARANCES, S.cfg.appearance);
+  seg($("gesture"), GESTURES, S.cfg.gesture);
+  $("window").value = S.cfg.double_tap_ms; fill($("window"));
+  $("window-val").textContent = `${S.cfg.double_tap_ms} ms`;
   $("ref").innerHTML = S.functions.map(f => `<span class="fn">${esc(f)}</span>`).join("");
 }
-$("gesture").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; S.cfg.gesture = b.dataset.v; renderGeneral(); changed(); });
+const onSeg = (id, key, after) => $(id).addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  S.cfg[key] = b.dataset.v; after?.(); renderGeneral(); changed();
+});
+onSeg("style", "style", applyTheme);
+onSeg("appearance", "appearance", applyTheme);
+onSeg("gesture", "gesture");
 $("window").addEventListener("input", e => { S.cfg.double_tap_ms = +e.target.value; renderGeneral(); changed(); });
 $("nav-general").addEventListener("click", () => { stopRecording(); S.page = "general"; render(); });
 $("import").addEventListener("click", async () => {
   const r = await call("import");
-  if (r.config) { S.cfg = r.config; S.sel = 0; S.pairOf = []; render(); changed(); refreshAllPairs(); toast("Imported. Press Save to keep it."); }
+  if (r.config) { S.cfg = r.config; S.sel = 0; S.pairOf = []; applyTheme(); render(); changed(); refreshAllPairs(); toast("Imported. Press Save to keep it."); }
   else if (r.error) toast(r.error, true);
 });
 $("export").addEventListener("click", async () => {
@@ -795,14 +721,14 @@ async function save() {
   if (!isDirty()) return true;
   const r = await call("save", { config: S.cfg });
   if (r.ok) { S.saved = JSON.stringify(S.cfg); changed(); toast("Saved"); return true; }
-  toast(r.error || "Couldn't save", true); return false;
+  toast(r.error || "Couldn't save. Check the file isn't open elsewhere and try again.", true); return false;
 }
 $("save").addEventListener("click", save);
-$("revert").addEventListener("click", () => { stopRecording(); S.cfg = JSON.parse(S.saved); S.sel = Math.min(S.sel, S.cfg.layers.length - 1); S.pairOf = []; render(); changed(); refreshAllPairs(); });
+$("revert").addEventListener("click", () => { stopRecording(); S.cfg = JSON.parse(S.saved); S.sel = Math.min(S.sel, S.cfg.layers.length - 1); S.pairOf = []; applyTheme(); render(); changed(); refreshAllPairs(); });
 handlers.close_request = async () => {
   if ($("confirm").hidden === false) return;                       // already asking
   if (isDirty()) {
-    const v = await ask("Save your changes?", "You have unsaved changes in your layers.", [["Cancel", "cancel"], ["Don’t save", "discard"], ["Save", "save", "accent"]]);
+    const v = await ask("Save your changes?", "You have unsaved changes in your layers.", [["Save", "save", "primary"], ["Don’t save", "discard"], ["Cancel", "cancel"]]);
     if (v === null || v === "cancel") return;
     if (v === "save" && !(await save())) return;                   // stay open if saving failed
   }
@@ -811,23 +737,27 @@ handlers.close_request = async () => {
 document.addEventListener("keydown", e => {
   if (e.ctrlKey && e.key.toLowerCase() === "s") { e.preventDefault(); save(); }
   if (e.key === "Escape" && !$("gallery").hidden) $("gallery").hidden = true;
-  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "l") document.documentElement.classList.toggle("dark");   // preview the other theme
+  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "l") {   // preview the other appearance (not saved)
+    const t = document.documentElement.dataset.theme;
+    document.documentElement.dataset.theme = t.endsWith("dark") ? t.replace("dark", "light") : t.replace("light", "dark");
+  }
 });
 
 function render() {
-  $("page-layer").hidden = S.page !== "layer";
-  $("page-general").hidden = S.page !== "general";
-  if (S.page === "layer") renderLayer(); else renderGeneral();
+  const general = S.page === "general";
+  $("app").classList.toggle("general", general);
+  $("page-layer").hidden = $("tool-layer").hidden = general;
+  $("page-general").hidden = $("tool-general").hidden = !general;
+  if (general) renderGeneral(); else renderLayer();
   renderSidebar();
 }
 
 (async () => {
   const d = await call("init");
-  document.documentElement.classList.toggle("dark", d.dark);
   S.cfg = d.config; S.saved = JSON.stringify(d.config); S.sel = Math.min(d.current, d.config.layers.length - 1); S.active = d.current;
-  S.pairs = d.pairs; S.functions = d.functions; S.templates = d.templates; S.apps = d.apps;
+  S.pairs = d.pairs; S.functions = d.functions; S.templates = d.templates; S.apps = d.apps; S.dark = d.dark;
   $("running").innerHTML = d.apps.map(a => `<option value="${esc(a)}">`).join("");
-  renderGallery(); render(); changed(); refreshAllPairs();
+  applyTheme(); renderKnob(d.battery); renderGallery(); render(); changed(); refreshAllPairs();
 })();
 </script>
 </body>

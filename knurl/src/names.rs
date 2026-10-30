@@ -10,6 +10,8 @@ pub const FUNCTIONS: &[(&str, &str)] = &[
     ("Scroll Up", "wheel:120"), ("Scroll Down", "wheel:-120"), ("Scroll Left", "hwheel:-120"), ("Scroll Right", "hwheel:120"),
     ("Zoom +", "ctrl+wheel:120"), ("Zoom -", "ctrl+wheel:-120"), ("Zoom Reset", "ctrl+0"),
     ("Volume +", "volup"), ("Volume -", "voldown"), ("Mute", "mute"),
+    // the mixer volume of whatever is playing media (Spotify, a browser tab...), see audio::media_app
+    ("Media Volume +", "appvol:media:+5"), ("Media Volume -", "appvol:media:-5"), ("Media Mute", "appmute:media"),
     ("Next Track", "next"), ("Previous Track", "prev"), ("Play/Pause", "playpause"), ("Stop", "stop"),
     ("Left Click", "click:left"), ("Right Click", "click:right"), ("Middle Click", "click:middle"),
     ("Double Click", "click:left; click:left"),

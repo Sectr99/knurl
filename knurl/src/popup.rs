@@ -1,5 +1,5 @@
-//! Dark rounded overlay that slides down from the top centre of the monitor under the cursor (fading in), holds,
-//! and slides back up (macOS-style). Title, subtitle, one pip per layer. Drawn with Direct2D into a per-pixel-alpha
+//! Rounded overlay that slides down from the top centre of the monitor under the cursor (fading in), holds,
+//! and slides back up (macOS-style). Styled from the Bench theme the user picked (see `Look`). Title, subtitle, one pip per layer. Drawn with Direct2D into a per-pixel-alpha
 //! layered window, so the card, its shadow, text and pips are all anti-aliased. Never takes focus; clicks pass through.
 use std::{cell::RefCell, time::{Duration, Instant}};
 use windows::{core::{w, PCWSTR}, Win32::Graphics::{Direct2D::{Common::*, *}, DirectWrite::*, Dxgi::Common::*, Gdi::HDC as D2dHdc}};
@@ -13,12 +13,25 @@ use windows_sys::Win32::{
 
 // Sizes in px at 96 dpi; colours 0xRRGGBB.
 const WIDTH: f32 = 280.0;
-const RADIUS: f32 = 16.0;  // Material "large" shape
 const SHADOW: f32 = 32.0;  // transparent margin around the card for its shadow
-const CARD: u32 = 0x282A2F;   // Material 3 dark surface-container-high (same scheme as the settings page)
-const ACCENT: u32 = 0x9ECAFF; // Material 3 dark primary
-const ON_SURFACE: u32 = 0xE2E2E9;
-const ON_SURFACE_VAR: u32 = 0xC3C6CF;
+
+/// Bench tokens for one theme (surface, border, ink, ink-muted, accent, window radius), plus the style's type:
+/// Instrument is uppercase with a mono subtitle (Cascadia Mono stands in for IBM Plex Mono, which isn't installed).
+struct Look { card: u32, edge: u32, ink: u32, muted: u32, accent: u32, radius: f32, instrument: bool, shadow: f32 }
+
+fn look(theme: &str) -> Look {
+    let l = |card, edge, ink, muted, accent, instrument: bool, shadow| Look {
+        card, edge, ink, muted, accent, radius: if instrument { 4.0 } else { 9.0 }, instrument, shadow };
+    match theme {
+        "native-light" => l(0xffffff, 0xe0e3e8, 0x1b1f27, 0x636a77, 0x2f5bd3, false, 0.012),
+        "native-dark" => l(0x202227, 0x363a42, 0xe7e9ee, 0x9aa1ae, 0x6e93f5, false, 0.022),
+        "instrument-light" => l(0xf7f8f9, 0xcdd2d8, 0x16191d, 0x5b636d, 0x9a5b00, true, 0.012),
+        _ => l(0x191c20, 0x272b31, 0xd8dce1, 0x7d8590, 0xf2a93b, true, 0.025),   // instrument-dark
+    }
+}
+
+/// The user's Style and Appearance; resolved on every show so "Match system" follows Windows.
+pub fn set_style(style: &str, appearance: &str) { STYLE.with(|s| *s.borrow_mut() = (style.into(), appearance.into())); }
 
 const SLIDE_IN: Duration = Duration::from_millis(220);
 const HOLD: Duration = Duration::from_millis(1300);
@@ -38,6 +51,7 @@ struct Anim { phase: Phase, x: i32, y_shown: i32, y_hidden: i32, y: i32 }
 
 thread_local! {
     static CONTENT: RefCell<Content> = RefCell::new(Content::default());
+    static STYLE: RefCell<(String, String)> = RefCell::new(("instrument".into(), "system".into()));
     static ANIM: RefCell<Anim> = RefCell::new(Anim { phase: Phase::Hidden, x: 0, y_shown: 0, y_hidden: 0, y: 0 });
     static SURFACE: RefCell<Option<Surface>> = const { RefCell::new(None) };
     static FACTORIES: (ID2D1Factory, IDWriteFactory) = unsafe {
@@ -167,8 +181,9 @@ fn text_format(dw: &IDWriteFactory, family: PCWSTR, weight: DWRITE_FONT_WEIGHT, 
 } }
 
 /// Draws the card: soft shadow, rounded fill with a hairline edge, title, subtitle and layer pips (the current one
-/// a wider accent pill). Windows 11 fonts; Windows 10 falls back to Segoe UI.
+/// a wider accent bar). Windows 11 fonts; Windows 10 falls back to Segoe UI.
 fn render(c: &Content, s: f32) -> windows::core::Result<Surface> {
+    let k = look(STYLE.with(|st| { let st = st.borrow(); crate::theme::bench_theme(&st.0, &st.1) }));
     let m = px(SHADOW, s) as f32;
     let (cw, ch) = (WIDTH * s, (if c.count > 0 { 96.0 } else { 76.0 }) * s);
     let (w, h) = ((cw + 2.0 * m).ceil() as i32, (ch + 2.0 * m).ceil() as i32);
@@ -193,27 +208,31 @@ fn render(c: &Content, s: f32) -> windows::core::Result<Surface> {
         rt.BeginDraw();
         rt.Clear(Some(&rgba(0, 0.0)));
         let brush = rt.CreateSolidColorBrush(&rgba(0, 0.0), None)?;
-        let (x0, y0, x1, y1, r) = (m, m, m + cw, m + ch, RADIUS * s);
+        let (x0, y0, x1, y1, r) = (m, m, m + cw, m + ch, k.radius * s);
 
-        brush.SetColor(&rgba(0, 0.022));   // shadow: stacked, growing translucent cards, a little below
+        brush.SetColor(&rgba(0, k.shadow));   // shadow: stacked, growing translucent cards, a little below
         for i in (1..=12).rev() {
             let (k, dy) = (i as f32 * 2.0 * s, 6.0 * s);
             rt.FillRoundedRectangle(&rounded(x0 - k, y0 - k + dy, x1 + k, y1 + k + dy, r + k), &brush);
         }
-        brush.SetColor(&rgba(CARD, 1.0));
+        brush.SetColor(&rgba(k.card, 1.0));
         rt.FillRoundedRectangle(&rounded(x0, y0, x1, y1, r), &brush);
-        brush.SetColor(&rgba(0xFFFFFF, 0.09));
+        brush.SetColor(&rgba(k.edge, 1.0));
         rt.DrawRoundedRectangle(&rounded(x0 + 0.5, y0 + 0.5, x1 - 0.5, y1 - 0.5, r), &brush, 1.0, None);
 
         let line = |top: f32, height: f32| D2D_RECT_F { left: x0 + 16.0 * s, right: x1 - 16.0 * s, top: y0 + top * s, bottom: y0 + (top + height) * s };
-        let title: Vec<u16> = c.title.encode_utf16().collect();
-        brush.SetColor(&rgba(ON_SURFACE, 1.0));
-        rt.DrawText(&title, &text_format(dw, w!("Segoe UI Variable Display"), DWRITE_FONT_WEIGHT_SEMI_BOLD, 21.0 * s)?,
+        let case = |t: &str| if k.instrument { t.to_uppercase() } else { t.to_string() };
+        let title: Vec<u16> = case(&c.title).encode_utf16().collect();
+        brush.SetColor(&rgba(k.ink, 1.0));
+        let size = if k.instrument { 18.0 } else { 21.0 } * s;
+        rt.DrawText(&title, &text_format(dw, w!("Segoe UI Variable Display"), DWRITE_FONT_WEIGHT_SEMI_BOLD, size)?,
                     &line(12.0, 32.0), &brush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
         if !c.subtitle.is_empty() {
-            let sub: Vec<u16> = c.subtitle.encode_utf16().collect();
-            brush.SetColor(&rgba(ON_SURFACE_VAR, 1.0));
-            rt.DrawText(&sub, &text_format(dw, w!("Segoe UI Variable Text"), DWRITE_FONT_WEIGHT_NORMAL, 13.0 * s)?,
+            let sub: Vec<u16> = case(&c.subtitle).encode_utf16().collect();
+            brush.SetColor(&rgba(k.muted, 1.0));
+            let font = if k.instrument { text_format(dw, w!("Cascadia Mono"), DWRITE_FONT_WEIGHT_NORMAL, 11.5 * s)? }
+                       else { text_format(dw, w!("Segoe UI Variable Text"), DWRITE_FONT_WEIGHT_NORMAL, 13.0 * s)? };
+            rt.DrawText(&sub, &font,
                         &line(44.0, 20.0), &brush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
         }
         if c.count > 0 {
@@ -223,8 +242,9 @@ fn render(c: &Content, s: f32) -> windows::core::Result<Surface> {
             for i in 0..c.count {
                 let current = i == c.index;
                 let len = if current { pill } else { dot };
-                brush.SetColor(&if current { rgba(ACCENT, 1.0) } else { rgba(ON_SURFACE_VAR, 0.35) });
-                rt.FillRoundedRectangle(&rounded(x, y - dot / 2.0, x + len, y + dot / 2.0, dot / 2.0), &brush);
+                brush.SetColor(&if current { rgba(k.accent, 1.0) } else { rgba(k.muted, 0.4) });
+                let corner = if k.instrument { 1.0 * s } else { dot / 2.0 };   // Instrument: square pills
+                rt.FillRoundedRectangle(&rounded(x, y - dot / 2.0, x + len, y + dot / 2.0, corner), &brush);
                 x += len + gap;
             }
         }

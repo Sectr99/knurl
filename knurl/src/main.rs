@@ -1,4 +1,5 @@
-//! Knurl: tray app for a rotary knob. F13/F15 (turn) and F14 (press) from the remapped knob drive per-layer actions.
+//! Knurl: tray app for a rotary knob. F13/F15 (turn), F14 (press) and F16/F17 (turn while held) from the remapped knob
+//! drive per-layer actions.
 //! Layers switch by tap gesture or follow the focused app. Tray menu: enable, next layer, per-app switching,
 //! settings, knob setup, install, start with Windows, quit.
 #![windows_subsystem = "windows"]
@@ -27,6 +28,8 @@ use windows_sys::Win32::{
 const VK_F13: u32 = 0x7C; // counter-clockwise
 const VK_F14: u32 = 0x7D; // press
 const VK_F15: u32 = 0x7E; // clockwise
+const VK_F16: u32 = 0x7F; // counter-clockwise while held
+const VK_F17: u32 = 0x80; // clockwise while held
 const TIMER_TAP: usize = 1;
 const TIMER_FOCUS: usize = 3;
 const TIMER_BATTERY: usize = 4;
@@ -92,13 +95,13 @@ impl App {
         let h = self.msg_hwnd();
         unsafe {
             if on {
-                for (id, vk) in [(1, VK_F13), (2, VK_F14), (3, VK_F15)] {
+                for (id, vk) in [(1, VK_F13), (2, VK_F14), (3, VK_F15), (4, VK_F16), (5, VK_F17)] {
                     if RegisterHotKey(h, id, MOD_NOREPEAT, vk) == 0 {
-                        self.balloon("Knurl", "Another app has claimed F13-F15; the knob won't work until it's closed.");
+                        self.balloon("Knurl", "Another app has claimed F13-F17; the knob won't work until it's closed.");
                     }
                 }
             } else {
-                for id in 1..=3 { UnregisterHotKey(h, id); }
+                for id in 1..=5 { UnregisterHotKey(h, id); }
             }
         }
         self.state.borrow_mut().enabled = on;
@@ -169,7 +172,10 @@ impl App {
     }
 
     fn on_hotkey(&self, vk: u32) {
-        let input = match vk { VK_F15 => knob::Input::Cw, VK_F13 => knob::Input::Ccw, _ => knob::Input::Press };
+        let input = match vk {
+            VK_F15 => knob::Input::Cw, VK_F13 => knob::Input::Ccw, VK_F17 => knob::Input::HeldCw, VK_F16 => knob::Input::HeldCcw,
+            _ => knob::Input::Press,
+        };
         let now = self.now();
         let (outs, window) = {
             let mut s = self.state.borrow_mut();
@@ -222,6 +228,7 @@ impl App {
         s.manual_layer = s.manual_layer.min(last);
         if !cfg.layers[s.knob.layer].enabled { s.knob.layer = Self::next_enabled(&cfg.layers, s.knob.layer); }
         if !cfg.layers[s.manual_layer].enabled { s.manual_layer = s.knob.layer; }
+        popup::set_style(&cfg.style, &cfg.appearance);
         s.config = cfg;
         s.parsed = parsed;
     }
@@ -273,7 +280,7 @@ impl App {
 
     fn setup_knob(&self) {
         match system::setup_knob() {
-            Ok(()) => self.balloon("Knob set up", "Turns now send F13/F15 and the press sends F14."),
+            Ok(()) => self.balloon("Knob set up", "Turns send F13/F15, the press F14, and turns while held F16/F17."),
             Err(e) => self.balloon("Couldn't set up the knob", &e),
         }
     }
@@ -318,7 +325,7 @@ fn build_ui(ui: &mut Ui) -> Result<(), nwg::NwgError> {
     item(&mut ui.m_auto, "Switch layers per app")?;
     item(&mut ui.m_settings, "Settings\u{2026}")?;
     nwg::MenuSeparator::builder().parent(&ui.menu).build(&mut ui.m_sep1)?;
-    item(&mut ui.m_setup, "Set up knob (map to F13\u{2013}F15)")?;
+    item(&mut ui.m_setup, "Set up knob (map to F13\u{2013}F17)")?;
     item(&mut ui.m_install, "Install to this PC")?;
     item(&mut ui.m_startup, "Start with Windows")?;
     nwg::MenuSeparator::builder().parent(&ui.menu).build(&mut ui.m_sep2)?;

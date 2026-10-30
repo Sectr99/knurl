@@ -18,8 +18,9 @@ use windows_sys::Win32::{
 use wry::WebViewBuilderExtWindows;
 
 const PAGE: &str = include_str!("../ui/settings.html");
-const ASSETS: &str = include_str!("../ui/assets.css");   // Roboto + logo, base64
-const ICONS: &str = include_str!("../ui/icons.js");      // Material Symbols paths
+const BENCH: &str = include_str!("../ui/bench.css");     // the Bench design system's tokens + components, vendored
+const ASSETS: &str = include_str!("../ui/assets.css");   // IBM Plex + logo, base64
+const ICONS: &str = include_str!("../ui/icons.js");      // Bench outline icons
 
 #[derive(Default)]
 pub struct Host { pub win: nwg::Window }
@@ -98,14 +99,16 @@ impl App {
     pub fn open_settings(&self) {
         let win = &self.ui.web.win;
         let hwnd = App::hwnd(&win.handle);
-        let dark = theme::system_dark();
-        theme::frame(hwnd, dark);
+        let theme = { let s = self.state.borrow(); theme::bench_theme(&s.config.style, &s.config.appearance) };
+        let dark = theme.ends_with("dark");
+        let bg = theme::surfaces(theme).1;
+        theme::frame(hwnd, theme);
         if self.web.view.borrow().is_none() {
             let inbox = self.web.inbox.clone();
             let notify = self.msg_hwnd();
             let built = wry::WebViewBuilder::new()
-                .with_html(PAGE.replace("/*ASSETS*/", ASSETS).replace("/*ICONS*/", ICONS))
-                .with_background_color(if dark { (17, 19, 24, 255) } else { (248, 249, 255, 255) })   // page colour: no white flash
+                .with_html(PAGE.replace("__THEME__", theme).replace("/*BENCH*/", BENCH).replace("/*ASSETS*/", ASSETS).replace("/*ICONS*/", ICONS))
+                .with_background_color(((bg >> 16) as u8, (bg >> 8) as u8, bg as u8, 255))   // page colour: no flash
                 .with_theme(if dark { wry::Theme::Dark } else { wry::Theme::Light })
                 .with_default_context_menus(false)
                 .with_hotkeys_zoom(false)
@@ -172,6 +175,7 @@ impl App {
                 let s = self.state.borrow();
                 json!({
                     "config": s.config, "current": s.knob.layer, "dark": theme::system_dark(),
+                    "battery": s.battery.as_ref().map(|b| json!({"percent": b.percent, "connected": b.connected})),
                     "pairs": PAIRS.iter().map(|p| json!({"name": p.0, "cw": p.1, "ccw": p.2, "press": p.3})).collect::<Vec<_>>(),
                     "functions": names::FUNCTIONS.iter().map(|f| f.0).collect::<Vec<_>>(),
                     "templates": config::templates().into_iter().map(|(desc, layer)| json!({"desc": desc, "layer": layer})).collect::<Vec<_>>(),
@@ -235,6 +239,7 @@ impl App {
                     }
                 }
             }
+            "theme" => { theme::frame(App::hwnd(&self.ui.web.win.handle), &str_of("theme")); json!({}) }   // style changed: title bar follows
             "close" => { self.close_settings(); return None; }
             _ => return None,
         })

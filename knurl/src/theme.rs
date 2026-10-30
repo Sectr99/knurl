@@ -40,10 +40,25 @@ pub fn allow_dark_menus() {
     }
 }
 
-/// Title bar matching dark/light.
-pub fn frame(hwnd: HWND, dark: bool) {
-    let on: BOOL = dark as BOOL;
-    let caption: u32 = if dark { 0x0018_1311 } else { 0x00FF_F9F8 };   // the page's Material surface, as 0x00BBGGRR
+/// The Bench theme id ("instrument-dark", "native-light"...) for the user's Style and Appearance (system/light/dark).
+pub fn bench_theme(style: &str, appearance: &str) -> &'static str {
+    let dark = match appearance { "light" => false, "dark" => true, _ => system_dark() };
+    match (style == "native", dark) {
+        (true, true) => "native-dark", (true, false) => "native-light", (false, true) => "instrument-dark", (false, false) => "instrument-light",
+    }
+}
+
+/// A Bench theme's (surface-chrome, surface-window) as 0xRRGGBB, from the system's tokens.css.
+pub fn surfaces(theme: &str) -> (u32, u32) {
+    match theme { "native-light" => (0xf3f4f7, 0xffffff), "native-dark" => (0x1a1c20, 0x202227),
+                  "instrument-light" => (0xe6e9ec, 0xf7f8f9), _ => (0x0e1012, 0x14171a) }
+}
+
+/// Title bar in the theme's chrome colour (Bench: chrome sits on surface-chrome; the controls stay native).
+pub fn frame(hwnd: HWND, theme: &str) {
+    let on: BOOL = theme.ends_with("dark") as BOOL;
+    let c = surfaces(theme).0;
+    let caption: u32 = (c & 0xFF) << 16 | (c & 0xFF00) | (c >> 16);   // 0xRRGGBB -> COLORREF 0x00BBGGRR
     unsafe {
         DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, (&on as *const BOOL).cast(), 4);
         DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, (&caption as *const u32).cast(), 4);

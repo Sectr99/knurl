@@ -12,6 +12,7 @@ pub const PAIRS: &[(&str, &str, &str, &str)] = &[
     ("Scroll left / right", "Scroll Right", "Scroll Left", ""),
     ("Zoom", "Zoom +", "Zoom -", "Zoom Reset"),
     ("Volume", "Volume +", "Volume -", "Mute"),
+    ("Media volume", "Media Volume +", "Media Volume -", "Play/Pause"),
     ("Tracks", "Next Track", "Previous Track", "Play/Pause"),
     ("Undo / redo", "Redo", "Undo", ""),
     ("Arrow up / down", "Down Arrow", "Up Arrow", "Enter"),
@@ -29,7 +30,7 @@ pub struct Layer {
     pub clockwise: String,
     pub counter_clockwise: String,
     pub press: String,
-    pub shift_clockwise: String,         // tap, then turn
+    pub shift_clockwise: String,         // turn while held, or tap then turn
     pub shift_counter_clockwise: String,
     pub speed: f32,                      // scales scrolling, repeats keys
     pub accelerate: bool,
@@ -56,23 +57,23 @@ pub fn templates() -> Vec<(&'static str, Layer)> {
     vec![
         ("Turn: Discord's volume in the Windows mixer \u{00B7} Press: mute Discord.",
          l("Discord", "Discord Volume +", "Discord Volume -", "Discord Mute", "", "", &["discord"])),
-        ("Turn: YouTube volume \u{00B7} Tap + turn: skip 10 s \u{00B7} Press: play / pause. On YouTube tabs in any browser.",
+        ("Turn: YouTube volume \u{00B7} Hold + turn: skip 10 s \u{00B7} Press: play / pause. On YouTube tabs in any browser.",
          l("YouTube", "Up Arrow", "Down Arrow", "K", "L", "J", &["title:youtube"])),
-        ("Turn: Spotify's volume (mixer) \u{00B7} Tap + turn: next / previous track \u{00B7} Press: play / pause.",
+        ("Turn: Spotify's volume (mixer) \u{00B7} Hold + turn: next / previous track \u{00B7} Press: play / pause.",
          l("Spotify", "Spotify Volume +", "Spotify Volume -", "Play/Pause", "Ctrl + Right Arrow", "Ctrl + Left Arrow", &["spotify"])),
-        ("Premiere Pro and DaVinci Resolve. Turn: step a frame \u{00B7} Tap + turn: shuttle faster \u{00B7} Press: play / stop.",
+        ("Premiere Pro and DaVinci Resolve. Turn: step a frame \u{00B7} Hold + turn: shuttle faster \u{00B7} Press: play / stop.",
          l("Video editing", "Right Arrow", "Left Arrow", "Space", "L", "J", &["adobe premiere pro", "resolve"])),
-        ("Turn: scroll by line \u{00B7} Tap + turn: next / previous file tab \u{00B7} Press: command palette.",
+        ("Turn: scroll by line \u{00B7} Hold + turn: next / previous file tab \u{00B7} Press: command palette.",
          l("VS Code", "Ctrl + Down Arrow", "Ctrl + Up Arrow", "Ctrl + Shift + P", "Ctrl + Page Down", "Ctrl + Page Up", &["code"])),
         ("Turn: Teams' volume (mixer) \u{00B7} Press: toggle your mic.",
          l("Teams call", "ms-teams Volume +", "ms-teams Volume -", "Ctrl + Shift + M", "", "", &["ms-teams"])),
         ("Turn: Zoom's volume (mixer) \u{00B7} Press: toggle your mic.",
          l("Zoom call", "Zoom Volume +", "Zoom Volume -", "Alt + A", "", "", &["zoom"])),
-        ("Turn: brush size \u{00B7} Tap + turn: zoom \u{00B7} Press: step back in history.",
+        ("Turn: brush size \u{00B7} Hold + turn: zoom \u{00B7} Press: step back in history.",
          l("Photoshop", "]", "[", "Ctrl + Z", "Ctrl + +", "Ctrl + -", &["photoshop"])),
-        ("Turn: zoom \u{00B7} Tap + turn: scroll sideways \u{00B7} Press: zoom to fit.",
+        ("Turn: zoom \u{00B7} Hold + turn: scroll sideways \u{00B7} Press: zoom to fit.",
          l("Figma", "Zoom +", "Zoom -", "Shift + 1", "Scroll Right", "Scroll Left", &["figma"])),
-        ("Turn: scroll sideways a screen \u{00B7} Tap + turn: next / previous sheet.",
+        ("Turn: scroll sideways a screen \u{00B7} Hold + turn: next / previous sheet.",
          l("Excel", "Alt + Page Down", "Alt + Page Up", "", "Ctrl + Page Down", "Ctrl + Page Up", &["excel"])),
     ]
 }
@@ -91,13 +92,18 @@ pub struct Config {
     pub tap_window_ms: u64,
     pub gesture: Gesture,
     pub auto_switch: bool,
+    pub style: String,        // Bench style: "instrument" (default: Knurl is a hardware tool) or "native"
+    pub appearance: String,   // "system", "light" or "dark"
     pub layers: Vec<Layer>,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Config { tap_window_ms: 350, gesture: Gesture::DoubleTap, auto_switch: true,
-                 layers: vec![Layer::from_pair("Scroll", 1), Layer::from_pair("Zoom", 3), Layer::from_pair("Media", 5)] }
+        Config { tap_window_ms: 350, gesture: Gesture::DoubleTap, auto_switch: true, style: "instrument".into(), appearance: "system".into(),
+                 layers: vec![Layer::from_pair("Scroll", 1), Layer::from_pair("Zoom", 3), Layer {
+                     shift_clockwise: "Next Track".into(), shift_counter_clockwise: "Previous Track".into(),
+                     ..Layer::from_pair("Media", 5)
+                 }] }
     }
 }
 
@@ -179,6 +185,10 @@ mod tests {
         // "Zoom Volume +" is the Zoom app's mixer volume, not the "Zoom +" function
         assert_eq!(crate::names::to_syntax("Zoom Volume +").unwrap(), "appvol:zoom:+5");
         assert_eq!(crate::names::to_syntax("Zoom +").unwrap(), "ctrl+wheel:120");
+        // the default Media layer: whatever is playing, in the mixer
+        assert_eq!(validate(&Config::default()).err(), None);
+        assert_eq!(crate::names::to_syntax("Media Volume -").unwrap(), "appvol:media:-5");
+        assert_eq!(Config::default().layers[2].clockwise, "Media Volume +");
     }
 
     #[test]

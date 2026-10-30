@@ -12,12 +12,12 @@ Actions are grouped into **layers**. Double-tap the knob to switch layers, or le
 you focus a particular app or browser tab.
 
 It was built for the **ANTICATER VK-01** desk knob, but works with any knob that can be set to send
-**F13 / F14 / F15**.
+**F13 / F14 / F15** (and optionally F16 / F17 for turning while held).
 
 ## Features
 
-- **Layers** of actions for turn clockwise, turn counter-clockwise and press, plus two more for
-  *tap, then turn*.
+- **Layers** of actions for turn clockwise, turn counter-clockwise and press, plus two more for turning while
+  holding the knob down (or *tap, then turn*).
 - **Switch layers** by double-tap, triple-tap or the tray menu, with a small popup showing where you are.
 - **Per-app layers**: a layer can follow the focused program (`chrome`, `code`) or a window title
   (`title:YouTube`), so the knob does the right thing in each app.
@@ -25,21 +25,24 @@ It was built for the **ANTICATER VK-01** desk knob, but works with any knob that
   `Play/Pause`), `Open …`, `Type …`, steps separated by commas. Checked as you type, with suggestions,
   or record a shortcut straight from the keyboard.
 - **Per-program volume**: `Discord Volume +`, `Spotify Mute` and so on change that program's volume in the
-  Windows mixer, not the system volume (handy with an external DAC).
+  Windows mixer, not the system volume (handy with an external DAC). `Media Volume +` follows whatever is
+  playing: Spotify, a browser tab, a video player.
 - **Templates** for Discord, YouTube, Spotify, video editing, VS Code, Teams, Zoom, Photoshop, Figma and Excel.
 - **Feel**: speed, acceleration for fast spins, and a rate limit per layer.
-- Knob setup from the tray, battery warnings over Bluetooth, start with Windows, light and dark themes.
+- Knob setup from the tray, battery level and warnings over Bluetooth, start with Windows.
+- Two styles from the [Bench design system](https://github.com/Sectr99/bench-design-system), each in light and dark:
+  **Instrument** (graphite and amber, mono readouts; the default) and **Native** (quiet, at home on Windows).
 
-<p align="center"><img src="docs/popup.png" width="280" alt="Layer popup"></p>
+<p align="center"><img src="docs/popup.png" width="280" alt="Layer popup, Instrument style">&nbsp;&nbsp;<img src="docs/popup-native.png" width="280" alt="Layer popup, Native style"></p>
 
 ## Screenshots
 
 | | |
 |---|---|
-| ![Choosing what turning does](docs/turning.png) | ![General settings](docs/general.png) |
-| *Pick what turning does, or type your own actions* | *Gesture, tap timing, backup and the names you can use* |
-| ![Templates](docs/templates.png) | ![Light theme](docs/light.png) |
-| *Start a layer from a template* | *Follows the Windows light / dark setting* |
+| ![Media layer](docs/media.png) | ![General settings](docs/general.png) |
+| *Media layer: turn for the playing app's volume, hold and turn to skip tracks* | *Style, appearance, gesture, tap timing, backup and the names you can use* |
+| ![Templates](docs/templates.png) | ![Native style, light](docs/light.png) |
+| *Start a layer from a template* | *Native style, light* |
 
 ## Getting started
 
@@ -50,7 +53,7 @@ It was built for the **ANTICATER VK-01** desk knob, but works with any knob that
    ```
 2. **Run** `knurl\target\release\knurl.exe`. Knurl lives in the tray; right-click it for the menu.
 3. **Set up the knob**: with the VK-01 plugged in over USB, choose *Set up knob* in the tray menu. This maps
-   its turns and press to F13 / F15 / F14. The mapping is stored on the knob itself.
+   its turns and press to F13 / F15 / F14, and turns while held to F16 / F17. The mapping is stored on the knob itself.
    Other knobs: map them to F13 (counter-clockwise), F14 (press) and F15 (clockwise) with their own software.
 4. Optional: *Install to this PC* copies Knurl to `%LOCALAPPDATA%\Programs\Knurl` with a Start-menu entry,
    and *Start with Windows* launches it at sign-in.
@@ -62,7 +65,7 @@ Needs the Microsoft Edge WebView2 runtime for the settings window (included with
 
 ## How it works
 
-The knob reports F13–F15 instead of volume keys, so nothing else on the PC reacts to it. Knurl registers those
+The knob reports F13–F17 instead of volume and brightness keys, so nothing else on the PC reacts to it. Knurl registers those
 keys as hotkeys, turns taps and turns into gestures, and sends the current layer's action with `SendInput` or
 the Windows audio session API. The tray and popup are native Win32 (the popup is drawn with Direct2D); the
 settings window is a single HTML page in WebView2, only loaded while it's open.
@@ -72,19 +75,19 @@ knurl/src/    main.rs  app, tray, hotkeys      knob.rs   gestures       action.r
               names.rs action names            config.rs settings       apps.rs    per-app layers
               audio.rs per-app volume          system.rs install, knob  popup.rs   layer popup
               theme.rs dark mode               webui.rs  settings window
-knurl/ui/     settings.html (+ generated icons.js, assets.css)
+knurl/ui/     settings.html, bench.css (design system), icons.js, assets.css (generated fonts + logo)
 ```
 
 `cargo test` runs the unit tests.
 
 ## Credits
 
-- Icons: [Material Symbols](https://fonts.google.com/icons) by Google, Apache License 2.0.
-- Font: [Roboto](https://fonts.google.com/specimen/Roboto) by Google, SIL Open Font License 1.1.
+- Design: the [Bench design system](https://github.com/Sectr99/bench-design-system) (tokens and components vendored in `knurl/ui/bench.css`).
+- Fonts: [IBM Plex Sans and Plex Mono](https://github.com/IBM/plex), SIL Open Font License 1.1.
 - Built with [native-windows-gui](https://github.com/gabdube/native-windows-gui),
   [wry](https://github.com/tauri-apps/wry), [hidapi](https://github.com/ruabmbua/hidapi-rs) and the
   [windows](https://github.com/microsoft/windows-rs) crates.
 
 ## License
 
-[MIT](LICENSE). Bundled Material Symbols (Apache 2.0) and Roboto (OFL 1.1) keep their own licenses.
+[MIT](LICENSE). The bundled IBM Plex fonts (OFL 1.1) keep their own license.

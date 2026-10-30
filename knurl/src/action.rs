@@ -143,6 +143,8 @@ fn title_case(app: &str) -> String {
 
 /// A program's mixer volume or mute, with popup text describing the result.
 fn app_audio(app: &str, delta: f32, mute: bool) -> (String, String) {
+    let resolved = if app == "media" { crate::audio::media_app() } else { Some(app.to_string()) };   // "Media Volume +"
+    let Some(app) = resolved.as_deref() else { return ("Media".into(), "Nothing is playing".into()) };
     let sub = match crate::audio::change(app, delta, mute) {
         Some((v, true)) => format!("Muted \u{00B7} volume {v}%"),
         Some((v, false)) => format!("Volume {v}%"),
