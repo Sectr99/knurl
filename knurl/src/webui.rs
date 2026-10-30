@@ -18,6 +18,8 @@ use windows_sys::Win32::{
 use wry::WebViewBuilderExtWindows;
 
 const PAGE: &str = include_str!("../ui/settings.html");
+const ASSETS: &str = include_str!("../ui/assets.css");   // Roboto + logo, base64
+const ICONS: &str = include_str!("../ui/icons.js");      // Material Symbols paths
 
 #[derive(Default)]
 pub struct Host { pub win: nwg::Window }
@@ -102,8 +104,8 @@ impl App {
             let inbox = self.web.inbox.clone();
             let notify = self.msg_hwnd();
             let built = wry::WebViewBuilder::new()
-                .with_html(PAGE)
-                .with_background_color(if dark { (32, 32, 32, 255) } else { (243, 243, 243, 255) })   // page colour: no white flash
+                .with_html(PAGE.replace("/*ASSETS*/", ASSETS).replace("/*ICONS*/", ICONS))
+                .with_background_color(if dark { (17, 19, 24, 255) } else { (248, 249, 255, 255) })   // page colour: no white flash
                 .with_theme(if dark { wry::Theme::Dark } else { wry::Theme::Light })
                 .with_default_context_menus(false)
                 .with_hotkeys_zoom(false)
@@ -169,7 +171,7 @@ impl App {
             "init" => {
                 let s = self.state.borrow();
                 json!({
-                    "config": s.config, "current": s.knob.layer, "dark": theme::system_dark(), "accent": theme::accent(),
+                    "config": s.config, "current": s.knob.layer, "dark": theme::system_dark(),
                     "pairs": PAIRS.iter().map(|p| json!({"name": p.0, "cw": p.1, "ccw": p.2, "press": p.3})).collect::<Vec<_>>(),
                     "functions": names::FUNCTIONS.iter().map(|f| f.0).collect::<Vec<_>>(),
                     "templates": config::templates().into_iter().map(|(desc, layer)| json!({"desc": desc, "layer": layer})).collect::<Vec<_>>(),

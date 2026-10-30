@@ -13,10 +13,12 @@ use windows_sys::Win32::{
 
 // Sizes in px at 96 dpi; colours 0xRRGGBB.
 const WIDTH: f32 = 280.0;
-const RADIUS: f32 = 14.0;
+const RADIUS: f32 = 16.0;  // Material "large" shape
 const SHADOW: f32 = 32.0;  // transparent margin around the card for its shadow
-const CARD: u32 = 0x2B2B2B;
-const ACCENT: u32 = 0x4CC2FF;  // Windows 11 dark-mode accent blue
+const CARD: u32 = 0x282A2F;   // Material 3 dark surface-container-high (same scheme as the settings page)
+const ACCENT: u32 = 0x9ECAFF; // Material 3 dark primary
+const ON_SURFACE: u32 = 0xE2E2E9;
+const ON_SURFACE_VAR: u32 = 0xC3C6CF;
 
 const SLIDE_IN: Duration = Duration::from_millis(220);
 const HOLD: Duration = Duration::from_millis(1300);
@@ -205,12 +207,12 @@ fn render(c: &Content, s: f32) -> windows::core::Result<Surface> {
 
         let line = |top: f32, height: f32| D2D_RECT_F { left: x0 + 16.0 * s, right: x1 - 16.0 * s, top: y0 + top * s, bottom: y0 + (top + height) * s };
         let title: Vec<u16> = c.title.encode_utf16().collect();
-        brush.SetColor(&rgba(0xFFFFFF, 1.0));
+        brush.SetColor(&rgba(ON_SURFACE, 1.0));
         rt.DrawText(&title, &text_format(dw, w!("Segoe UI Variable Display"), DWRITE_FONT_WEIGHT_SEMI_BOLD, 21.0 * s)?,
                     &line(12.0, 32.0), &brush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
         if !c.subtitle.is_empty() {
             let sub: Vec<u16> = c.subtitle.encode_utf16().collect();
-            brush.SetColor(&rgba(0xFFFFFF, 0.62));
+            brush.SetColor(&rgba(ON_SURFACE_VAR, 1.0));
             rt.DrawText(&sub, &text_format(dw, w!("Segoe UI Variable Text"), DWRITE_FONT_WEIGHT_NORMAL, 13.0 * s)?,
                         &line(44.0, 20.0), &brush, D2D1_DRAW_TEXT_OPTIONS_NONE, DWRITE_MEASURING_MODE_NATURAL);
         }
@@ -221,7 +223,7 @@ fn render(c: &Content, s: f32) -> windows::core::Result<Surface> {
             for i in 0..c.count {
                 let current = i == c.index;
                 let len = if current { pill } else { dot };
-                brush.SetColor(&if current { rgba(ACCENT, 1.0) } else { rgba(0xFFFFFF, 0.28) });
+                brush.SetColor(&if current { rgba(ACCENT, 1.0) } else { rgba(ON_SURFACE_VAR, 0.35) });
                 rt.FillRoundedRectangle(&rounded(x, y - dot / 2.0, x + len, y + dot / 2.0, dot / 2.0), &brush);
                 x += len + gap;
             }
