@@ -84,3 +84,7 @@ knurl/ui/     settings.html (+ generated icons.js, assets.css)
 - Built with [native-windows-gui](https://github.com/gabdube/native-windows-gui),
   [wry](https://github.com/tauri-apps/wry), [hidapi](https://github.com/ruabmbua/hidapi-rs) and the
   [windows](https://github.com/microsoft/windows-rs) crates.
+
+## License
+
+[MIT](LICENSE). Bundled Material Symbols (Apache 2.0) and Roboto (OFL 1.1) keep their own licenses.
