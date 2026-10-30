@@ -41,7 +41,17 @@ impl HasWindowHandle for Hwnd {
 
 /// The web view and its inbox; lives in App.
 #[derive(Default)]
-pub struct Web { view: RefCell<Option<wry::WebView>>, inbox: Rc<RefCell<VecDeque<String>>> }
+pub struct Web { view: RefCell<Option<wry::WebView>>, inbox: Rc<RefCell<VecDeque<String>>>, opening: std::cell::Cell<bool> }
+
+/// wry gives every web view a "WRY_WEBVIEW" container in our window but only destroys it for child web views, so
+/// closed ones pile up, and an empty one stacked over the page swallows every click (stuck resize cursor).
+fn destroy_containers(hwnd: isize) {
+    let class = system::wide("WRY_WEBVIEW");
+    loop {
+        let leftover = unsafe { FindWindowExW(hwnd, 0, class.as_ptr(), std::ptr::null()) };
+        if leftover == 0 || unsafe { DestroyWindow(leftover) } == 0 { break; }
+    }
+}
 
 // --- window size and position, kept in %APPDATA%\Knurl\window.txt as "left top right bottom maximized" ---
 
@@ -104,6 +114,10 @@ impl App {
         let bg = theme::surfaces(theme).1;
         theme::frame(hwnd, theme);
         if self.web.view.borrow().is_none() {
+            // Building pumps messages while WebView2 starts; a second open from then (a double-click on the tray
+            // icon) would build a second web view on top of the first. The first open finishes the job.
+            if self.web.opening.replace(true) { return; }
+            destroy_containers(hwnd);
             let inbox = self.web.inbox.clone();
             let notify = self.msg_hwnd();
             let built = wry::WebViewBuilder::new()
@@ -118,6 +132,7 @@ impl App {
                     unsafe { PostMessageW(notify, WM_WEB, 0, 0) };
                 })
                 .build(&Hwnd(hwnd));
+            self.web.opening.set(false);
             match built {
                 Ok(v) => *self.web.view.borrow_mut() = Some(v),
                 Err(e) => {
@@ -144,14 +159,7 @@ impl App {
         self.state.borrow_mut().recording = None;
         self.web.inbox.borrow_mut().clear();
         self.web.view.borrow_mut().take();
-        // wry only destroys its "WRY_WEBVIEW" container for child web views; ours is left behind, and an empty one
-        // stacked over the next open's page swallowed every click (stuck resize cursor). Remove them all here.
-        let hwnd = App::hwnd(&self.ui.web.win.handle);
-        let class = system::wide("WRY_WEBVIEW");
-        loop {
-            let leftover = unsafe { FindWindowExW(hwnd, 0, class.as_ptr(), std::ptr::null()) };
-            if leftover == 0 || unsafe { DestroyWindow(leftover) } == 0 { break; }
-        }
+        destroy_containers(App::hwnd(&self.ui.web.win.handle));
         self.ui.web.win.set_visible(false);
     }
 
