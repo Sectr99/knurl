@@ -1,11 +1,13 @@
-# Only the app's source is committed (knurl/). Everything below stays local.
+# The app (knurl/), README.md and its screenshots (docs/) are committed. Everything below stays local.
 
 # Rust build output
 target/
 
-# AI/working notes (CLAUDE.md + notes/) stay local
+# AI/working notes and Claude Code files stay local
 CLAUDE.md
+CLAUDE.local.md
 notes/
+.mcp.json
 HANDOFF.md
 
 # Device research, probes, the vendor's apps and the Python prototype
