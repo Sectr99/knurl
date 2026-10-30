@@ -4,7 +4,7 @@
 //! Page -> Rust: {"id": n, "cmd": "...", ...}. Messages are queued and handled from the app's own message loop
 //! (not inside WebView2's callback, where file dialogs and other nested loops can deadlock).
 //! Rust -> page: knob.reply(id, data) and knob.event(name, data).
-use crate::{apps, config::{self, Config, PAIRS}, names, theme, App, WM_RECORDED, WM_WEB};
+use crate::{apps, config::{self, Config, PAIRS}, names, system, theme, App, WM_RECORDED, WM_WEB};
 use native_windows_gui as nwg;
 use raw_window_handle::{HandleError, HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle};
 use serde_json::{json, Value};
@@ -144,6 +144,14 @@ impl App {
         self.state.borrow_mut().recording = None;
         self.web.inbox.borrow_mut().clear();
         self.web.view.borrow_mut().take();
+        // wry only destroys its "WRY_WEBVIEW" container for child web views; ours is left behind, and an empty one
+        // stacked over the next open's page swallowed every click (stuck resize cursor). Remove them all here.
+        let hwnd = App::hwnd(&self.ui.web.win.handle);
+        let class = system::wide("WRY_WEBVIEW");
+        loop {
+            let leftover = unsafe { FindWindowExW(hwnd, 0, class.as_ptr(), std::ptr::null()) };
+            if leftover == 0 || unsafe { DestroyWindow(leftover) } == 0 { break; }
+        }
         self.ui.web.win.set_visible(false);
     }
 
